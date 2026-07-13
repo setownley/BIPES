@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -160,7 +160,7 @@ document.body.appendChild(el);
         <button id="runButton" class="notext primary icon" title="..."></button>
       </div>
 
-        <button id="saveMainButton" class="button icon text" onclick="Files.save_main(); return false;" title="Save program to robot — runs on every power-up">Save to robot</button>
+        <button id="saveMainButton" class="button icon text" onclick="Files.save_main(); return false;" title="Save program to robot â€” runs on every power-up">Save to robot</button>
 
         <button id="linkButton" class="notext icon" title="..."></button>
 
@@ -421,7 +421,7 @@ Tool.clearQueue ();
 
 window.onload = function() {
 	checkCookie()
-	loadPage(); //Load modal splash screen
+	//loadPage(); // splash disabled for classroom
 
 	//i18n
 	//Auto detect user language (from the browser)
@@ -440,7 +440,7 @@ window.onload = function() {
 		pLang='en';
 
 	if ((userLang.startsWith("pt")) || (pLang.startsWith("pt"))) {	
-		addMsg="<p><a href=/beta2/ui/?lang=pt-br>Acessar o BIPES em Português</a>";
+		addMsg="<p><a href=/beta2/ui/?lang=pt-br>Acessar o BIPES em PortuguÃªs</a>";
 		addMsg+=" | <a href=/beta2/ui/?lang=en>Access BIPES in English</a>";
 	}
 
@@ -727,6 +727,7 @@ function eraseCookieModal(name) {
 
 
 </html>
+
 
 
 
