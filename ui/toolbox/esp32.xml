@@ -1,10 +1,6 @@
 ﻿<document>
 	<category name="Robot" colour="#FFD400">
-<block type="robot_follow"></block>
-<block type="robot_left_open"></block>
-<block type="robot_front_blocked"></block>
-<block type="robot_turn90"></block>
-	  <block type="robot_forward"></block>
+<block type="robot_forward"></block>
 	  <block type="robot_distance"></block>
 	  <block type="robot_backward"></block>
 		<block type="robot_turn"></block>
@@ -22,7 +18,11 @@
 	  
 	  
 	  
-	</category>
+	<block type="robot_follow"></block>
+<block type="robot_left_open"></block>
+<block type="robot_front_blocked"></block>
+<block type="robot_turn90"></block>
+</category>
   <category name="%{BKY_CATLOGIC}" colour="%{BKY_LOGIC_HUE}">
       <block type="controls_if"></block>
       <block type="logic_compare"></block>
@@ -3414,4 +3414,5 @@ _
 </category>
 </category>
 </document>
+
 
