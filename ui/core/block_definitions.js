@@ -11965,3 +11965,41 @@ Blockly.Blocks['robot_show'] = {
   }
 };
 
+
+/* ---- Maze blocks (robot.py v0.5.1) ---- */
+Blockly.Blocks['robot_follow'] = {
+  init: function() {
+    this.appendDummyInput().appendField("follow wall until change");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Follow the left wall until it opens or something blocks the front.");
+  }
+};
+Blockly.Blocks['robot_left_open'] = {
+  init: function() {
+    this.appendDummyInput().appendField("left is open?");
+    this.setOutput(true, "Boolean");
+    this.setColour("#FFD400");
+    this.setTooltip("True if the last follow ended because the left wall opened.");
+  }
+};
+Blockly.Blocks['robot_front_blocked'] = {
+  init: function() {
+    this.appendDummyInput().appendField("blocked in front?");
+    this.setOutput(true, "Boolean");
+    this.setColour("#FFD400");
+    this.setTooltip("True if the last follow ended at a wall ahead.");
+  }
+};
+Blockly.Blocks['robot_turn90'] = {
+  init: function() {
+    this.appendDummyInput()
+        .appendField("turn 90")
+        .appendField(new Blockly.FieldDropdown([["left","left"], ["right","right"]]), "DIR");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Spin exactly 90 degrees using the calibrated turn time.");
+  }
+};

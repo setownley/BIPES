@@ -1,5 +1,9 @@
-<document>
+﻿<document>
 	<category name="Robot" colour="#FFD400">
+<block type="robot_follow"></block>
+<block type="robot_left_open"></block>
+<block type="robot_front_blocked"></block>
+<block type="robot_turn90"></block>
 	  <block type="robot_forward"></block>
 	  <block type="robot_distance"></block>
 	  <block type="robot_backward"></block>
@@ -355,7 +359,7 @@
           <field name="TEXT"></field>
         </shadow>
       </value>
-      <value name="Função">
+      <value name="FunÃ§Ã£o">
         <shadow type="text">
           <field name="TEXT"></field>
         </shadow>
@@ -1065,12 +1069,12 @@
       <block type="dht_read_temp"></block>
       <block type="dht_read_humidity"></block>
     </category>
-<!--Adicionando os blocos do Anenmômetro-->
-    <category name="Anemômetro">
-    <label text="Anenômetro"></label>
-<!--Iniciar Anemômetro-->
+<!--Adicionando os blocos do AnenmÃ´metro-->
+    <category name="AnemÃ´metro">
+    <label text="AnenÃ´metro"></label>
+<!--Iniciar AnemÃ´metro-->
     <block type="anemo_init">
-        <value name="Função">
+        <value name="FunÃ§Ã£o">
           <shadow type="text">
             <field name="TEXT"></field>
           </shadow>
@@ -1081,21 +1085,21 @@
           </shadow>
         </value>
       </block>
-<!--Parar Anemômetro-->
+<!--Parar AnemÃ´metro-->
       <block type="anemo_stop">
-        <value name="Função">
+        <value name="FunÃ§Ã£o">
           <shadow type="text">
             <field name="TEXT"></field>
           </shadow>
         </value>
       </block>
   </category>
-<!--Adicionando os blocos do Pluviômetro--> 
-  <category name="Pluviômetro">
-    <label text= "Pluviômetro"></label>
-<!--Iniciar Pluviômetro-->
+<!--Adicionando os blocos do PluviÃ´metro--> 
+  <category name="PluviÃ´metro">
+    <label text= "PluviÃ´metro"></label>
+<!--Iniciar PluviÃ´metro-->
     <block type="pluvio_init">
-        <value name="Função">
+        <value name="FunÃ§Ã£o">
           <shadow type="text">
             <field name="TEXT"></field>
           </shadow>
@@ -1106,9 +1110,9 @@
           </shadow>
         </value>
       </block>
-<!--Parar Pluviômetro-->
+<!--Parar PluviÃ´metro-->
       <block type="pluvio_stop">
-        <value name="Função">
+        <value name="FunÃ§Ã£o">
           <shadow type="text">
             <field name="TEXT"></field>
           </shadow>
@@ -2279,7 +2283,7 @@ _
 <category name="%{BKY_CAT_CONTROL}">
   <category name="PID">
     <button text="Install control library" callbackKey="installPyLib"></button>
-    <label text="Proportional–integral–derivative Controller"></label>
+    <label text="Proportionalâ€“integralâ€“derivative Controller"></label>
       <label text="Library: https://github.com/JorgeGMarques/micropython-simple-pid"></label>
       <button text="Load example: pid_water_boiler" callbackKey="loadExample"></button>
 
@@ -3410,3 +3414,4 @@ _
 </category>
 </category>
 </document>
+

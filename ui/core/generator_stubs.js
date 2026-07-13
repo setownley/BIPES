@@ -6432,3 +6432,20 @@ Blockly.Python['robot_show'] = function(block) {
 
 
   
+/* ---- Maze generators (robot.py v0.5.1) ---- */
+Blockly.Python['robot_follow'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return "robot.follow_wall()\n";
+};
+Blockly.Python['robot_left_open'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return ['robot.left_open()', Blockly.Python.ORDER_FUNCTION_CALL];
+};
+Blockly.Python['robot_front_blocked'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return ['robot.front_blocked()', Blockly.Python.ORDER_FUNCTION_CALL];
+};
+Blockly.Python['robot_turn90'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return "robot.turn90('" + block.getFieldValue('DIR') + "')\n";
+};
