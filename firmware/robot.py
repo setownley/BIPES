@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "0.4.4"  # must match the block set deployed in the BIPES fork
+VERSION = "0.5.1"  # must match the block set deployed in the BIPES fork
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -49,6 +49,16 @@ CAL_WALL_MIN = 60           # side reading must be inside this band to start
 CAL_WALL_MAX = 300
 CAL_FRONT_STOP_MM = 250     # abort a cal pass if something is ahead
 CAL_PASSES_MAX = 10
+# ---- Maze layer (v0.5.0). Derivations for corridor = 300 mm, robot 160 mm:
+MAZE_TARGET_MM = 70         # centered: (300 - 160) / 2
+MAZE_OPEN_MM = 200          # in-corridor max reading ~140; gap reads >= 300
+MAZE_FRONT_STOP_MM = 130    # leaves >130mm center-to-wall for the 233mm spin diagonal
+MAZE_KP = 0.0025            # duty fraction per mm of side error (sim-swept)
+MAZE_KD_RATIO = 4           # D/P ratio (sim-swept)
+MAZE_MAX_STEER = 0.12
+MAZE_ADVANCE_MM = 230       # parks the PIVOT at gap center: 120 (sensor->axle) + 150 (half gap) - ~40 (debounce travel)
+MAZE_GAP_MM = 450           # 1.5 cells with no wall = treat as open
+MAZE_SPEED = "slow"         # 290 mm/s: 29 mm/tick staleness
 OLED_EVERY_N_TICKS = 5      # dashboard repaint cadence = 500 ms
 CAL_FILE = "qre_cal.txt"
 TRIM_FILE = "trim_cal.txt"      # per-robot straight-drive trim (v0.3.0)
@@ -499,6 +509,99 @@ def raw_forward(duty):
     b = ("B2", "B1") if FLIP_B else ("B1", "B2")
     _pwm[a[0]].duty(int(d * _trim["A"])); _pwm[a[1]].duty(0)
     _pwm[b[0]].duty(int(d * _trim["B"])); _pwm[b[1]].duty(0)
+
+# ---------------------------------------------------------------------------
+# Maze layer (v0.5.0) - wall following with continuous steering. This is the
+# feedback loop that absorbs launch yaw and residual trim error.
+# ---------------------------------------------------------------------------
+_last_event = ""
+
+def _steer(base_duty, err_mm):
+    """Drive forward with a duty differential proportional to side error.
+    err > 0 = too far from left wall = steer left (slow the left wheel)."""
+    k = err_mm * MAZE_KP
+    if k > MAZE_MAX_STEER: k = MAZE_MAX_STEER
+    if k < -MAZE_MAX_STEER: k = -MAZE_MAX_STEER
+    left = int(base_duty * (1 - k))
+    right = int(base_duty * (1 + k))
+    if LEFT_MOTOR == "A":
+        da, db = left, right
+    else:
+        da, db = right, left
+    a = ("A2", "A1") if FLIP_A else ("A1", "A2")
+    b = ("B2", "B1") if FLIP_B else ("B1", "B2")
+    _pwm[a[0]].duty(int(da * _trim["A"])); _pwm[a[1]].duty(0)
+    _pwm[b[0]].duty(int(db * _trim["B"])); _pwm[b[1]].duty(0)
+
+def follow_wall():
+    """Follow the LEFT wall until something changes. Sets the event readable
+    by left_open() / front_blocked(). Kid block: 'follow wall until change'."""
+    global _last_event
+    base = _speed(MAZE_SPEED)
+    mm_per_tick = 29                      # slow, measured 290 mm/s
+    if distance_mm() < MAZE_FRONT_STOP_MM:
+        _last_event = "front"             # v0.5.1: pre-check BEFORE moving -
+        return                            # dead-end second turn fires with zero motion
+    forward(MAZE_SPEED)                   # ramped launch
+    open_ticks = 0
+    gap_mm = 0
+    prev_s = None
+    try:
+        while True:
+            time.sleep_ms(TICK_MS)
+            if distance_mm() < MAZE_FRONT_STOP_MM:
+                _last_event = "front"
+                return
+            s = side_mm()
+            if s >= MAZE_OPEN_MM:
+                open_ticks += 1
+                gap_mm += mm_per_tick
+                if open_ticks >= 2:
+                    # wall gone (debounced): clear the gap edge, then report
+                    adv = MAZE_ADVANCE_MM
+                    while adv > 0:
+                        time.sleep_ms(TICK_MS)
+                        if distance_mm() < MAZE_FRONT_STOP_MM:
+                            _last_event = "front"
+                            return
+                        adv -= mm_per_tick
+                    _last_event = "left"
+                    return
+                if gap_mm >= MAZE_GAP_MM:
+                    _last_event = "left"
+                    return
+                _steer(base, 0)           # hold straight across small gaps
+            else:
+                open_ticks = 0
+                gap_mm = 0
+                ds = 0 if prev_s is None else (s - prev_s)
+                prev_s = s
+                _steer(base, (s - MAZE_TARGET_MM) + MAZE_KD_RATIO * ds)
+    finally:
+        stop()
+
+def left_open():
+    return _last_event == "left"
+
+def front_blocked():
+    return _last_event == "front"
+
+def turn90(direction="left"):
+    """Timed 90-degree spin using the calibrated t90 from maze_cal.json."""
+    t = None
+    try:
+        import json
+        with open(MAZE_CAL_FILE) as f:
+            t = json.load(f).get("t90_" + str(direction).lower())
+    except (OSError, ValueError, ImportError):
+        pass
+    if t is None:
+        print("robot: t90 not calibrated - run bench turn section")
+        return
+    stop()
+    turn(direction)
+    time.sleep(t)
+    stop()
 
 def set_trim(a=None, b=None):
     """Set straight-drive trim in RAM. Values clamped to 0.5-1.0."""
