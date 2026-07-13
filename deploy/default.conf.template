@@ -1,0 +1,22 @@
+# Rendered by the nginx image entrypoint at container start:
+# ${PORT} is substituted from the environment (Railway injects it; the
+# Dockerfile's ENV PORT=8080 is the local default).
+server {
+    listen       ${PORT};
+    listen  [::]:${PORT};
+    server_name  _;
+
+    root   /usr/share/nginx/html;
+    index  index.html;
+
+    # Classroom cache policy: force revalidation on every load so a pushed
+    # block fix is live on the next browser refresh. Costs only 304s.
+    add_header Cache-Control "no-cache";
+
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json text/xml image/svg+xml;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

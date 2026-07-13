@@ -141,11 +141,11 @@ document.body.appendChild(el);
       </div>
       <div class="icon" id="deviceSelect">
         <select id="device_selector">
+          <option value="ESP32">ESP32</option>
           <option value="AmadoBoard">Amado Board</option>
           <option value="ESP8266">ESP8266</option>
           <option value="ESP32S2">Franzininho Wifi (ESP32S2+CircuitPython)</option>
           <option value="ESP8266">Wemos D1 mini</option>
-          <option value="ESP32">ESP32</option>
           <option value="ESP32basic">ESP32 (Basic)</option>
           <option value="M5STICK">m5stick (ESP32)</option>
           <option value="Nucleo">ST Nucleo (mBed)</option>
@@ -159,6 +159,8 @@ document.body.appendChild(el);
         </select>
         <button id="runButton" class="notext primary icon" title="..."></button>
       </div>
+
+        <button id="saveMainButton" class="button icon text" onclick="Files.save_main(); return false;" title="Save program to robot — runs on every power-up">Save to robot</button>
 
         <button id="linkButton" class="notext icon" title="..."></button>
 

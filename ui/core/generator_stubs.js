@@ -6359,6 +6359,69 @@ Blockly.Python['math_max'] = function(block) {
   var code = 'max(' + value1 + ', ' + value2 + ')';
   return [code, Blockly.Python.ORDER_FUNCTION_CALL];
 };
+
+
+// ---- Classroom robot generators (robot.py v0.2.0, mm API) ----
+
+Blockly.Python['robot_forward'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  var speed = block.getFieldValue('SPEED');
+  return "robot.forward('" + speed + "')\n";
+};
+
+Blockly.Python['robot_distance'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return ['robot.distance_mm()', Blockly.Python.ORDER_ATOMIC];
+};
+
+/* ---- Classroom robot generators, batch 2 — APPEND to ui/core/generator_stubs.js ---- */
+ 
+Blockly.Python['robot_backward'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return `robot.backward('${block.getFieldValue('SPEED')}')\n`;
+};
+ 
+Blockly.Python['robot_turn'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return `robot.turn('${block.getFieldValue('DIR')}')\n`;
+};
+ 
+Blockly.Python['robot_stop'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return "robot.stop()\n";
+};
+ 
+Blockly.Python['robot_wait'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  var t = Blockly.Python.valueToCode(block, 'TIME', Blockly.Python.ORDER_NONE) || '0';
+  return `robot.wait(${t})\n`;
+};
+ 
+Blockly.Python['robot_side'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return ['robot.side_mm()', Blockly.Python.ORDER_FUNCTION_CALL];
+};
+ 
+Blockly.Python['robot_on_line'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return ['robot.on_line()', Blockly.Python.ORDER_FUNCTION_CALL];
+};
+ 
+Blockly.Python['robot_button'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return ['robot.button()', Blockly.Python.ORDER_FUNCTION_CALL];
+};
+ 
+Blockly.Python['robot_led'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return `robot.led(${block.getFieldValue('STATE')})\n`;
+};
+ 
+Blockly.Python['robot_show'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  var txt = Blockly.Python.valueToCode(block, 'TEXT', Blockly.Python.ORDER_NONE) || "''";
+  return `robot.show(${txt})\n`;
+};
   
   
   

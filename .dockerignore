@@ -1,0 +1,6 @@
+.git
+.github
+docs
+Dockerfile
+.dockerignore
+bipes_offline.zip

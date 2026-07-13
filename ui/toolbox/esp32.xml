@@ -1,4 +1,24 @@
 <document>
+	<category name="Robot" colour="#FFD400">
+	  <block type="robot_forward"></block>
+	  <block type="robot_distance"></block>
+	  <block type="robot_backward"></block>
+		<block type="robot_turn"></block>
+		<block type="robot_stop"></block>
+		<block type="robot_wait">
+		  <value name="TIME"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+		</block>
+		<block type="robot_side"></block>
+		<block type="robot_on_line"></block>
+		<block type="robot_button"></block>
+		<block type="robot_led"></block>
+		<block type="robot_show">
+		  <value name="TEXT"><shadow type="text"><field name="TEXT">hello</field></shadow></value>
+		</block>
+	  
+	  
+	  
+	</category>
   <category name="%{BKY_CATLOGIC}" colour="%{BKY_LOGIC_HUE}">
       <block type="controls_if"></block>
       <block type="logic_compare"></block>

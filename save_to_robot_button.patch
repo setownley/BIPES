@@ -1,0 +1,42 @@
+diff --git a/ui/core/utils.js b/ui/core/utils.js
+index b7b0a4e..b6deae3 100644
+--- a/ui/core/utils.js
++++ b/ui/core/utils.js
+@@ -541,6 +541,24 @@ class files {
+   /**
+    * Get file from ``codemirror``editor and calls :js:func:`Files.put_file` to upload.
+    */
++  /**
++   * One-click: generate Python from the block workspace and save it to the
++   * board as main.py (runs automatically on every power-up / RESET).
++   */
++  save_main () {
++    if (!mux.connected ()) {
++      UI ['notify'].send ('Connect to the robot first, then try again.');
++      return;
++    }
++    let codeStr = Blockly.Python.workspaceToCode (Code.workspace);
++    var bufCode = new Uint8Array (codeStr.length);
++    for (var i = 0, strLen = codeStr.length; i < strLen; i++) {
++      bufCode [i] = codeStr.charCodeAt (i);
++    }
++    this.put_file_name = 'main.py';
++    this.put_file_data = bufCode;
++    this.put_file ();
++  }
+   files_save_as () {
+ 
+     //For codemirror
+diff --git a/ui/index.html b/ui/index.html
+index 78cc057..6c92cc1 100644
+--- a/ui/index.html
++++ b/ui/index.html
+@@ -160,6 +160,8 @@ document.body.appendChild(el);
+         <button id="runButton" class="notext primary icon" title="..."></button>
+       </div>
+ 
++        <button id="saveMainButton" class="button icon text" onclick="Files.save_main(); return false;" title="Save program to robot — runs on every power-up">Save to robot</button>
++
+         <button id="linkButton" class="notext icon" title="..."></button>
+ 
+         <button id="saveButton" class="notext icon" title="..."></button>

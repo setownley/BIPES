@@ -11835,3 +11835,133 @@ Blockly.Blocks['math_max'] = {
   }
 };
 
+
+/* ---- Classroom robot blocks, batch 2 (robot.py v0.2.0) — APPEND to ui/core/block_definitions.js ---- */
+
+Blockly.Blocks['robot_forward'] = {
+  init: function() {
+    this.appendDummyInput()
+        .appendField("drive forward")
+        .appendField(new Blockly.FieldDropdown([
+            ["slow", "slow"],
+            ["medium", "medium"],
+            ["fast", "fast"]
+        ]), "SPEED");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Drive the robot forward at the chosen speed");
+    this.setHelpUrl("");
+  }
+};
+
+Blockly.Blocks['robot_distance'] = {
+  init: function() {
+    this.appendDummyInput()
+        .appendField("front distance (mm)");
+    this.setOutput(true, "Number");
+    this.setColour("#FFD400");
+    this.setTooltip("Cached front ultrasonic distance in mm; 9999 = no reading");
+    this.setHelpUrl("");
+  }
+};
+
+
+
+ 
+Blockly.Blocks['robot_backward'] = {
+  init: function() {
+    this.appendDummyInput()
+        .appendField("drive backward")
+        .appendField(new Blockly.FieldDropdown([["slow","slow"], ["medium","medium"], ["fast","fast"]]), "SPEED");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Drive the robot backward at the chosen speed.");
+  }
+};
+ 
+Blockly.Blocks['robot_turn'] = {
+  init: function() {
+    this.appendDummyInput()
+        .appendField("turn")
+        .appendField(new Blockly.FieldDropdown([["left","left"], ["right","right"]]), "DIR");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Spin turn at medium speed.");
+  }
+};
+ 
+Blockly.Blocks['robot_stop'] = {
+  init: function() {
+    this.appendDummyInput().appendField("stop motors");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Stop all motors (coast).");
+  }
+};
+ 
+Blockly.Blocks['robot_wait'] = {
+  init: function() {
+    this.appendValueInput("TIME").setCheck("Number").appendField("wait");
+    this.appendDummyInput().appendField("seconds");
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Wait the given seconds (0 to 60).");
+  }
+};
+ 
+Blockly.Blocks['robot_side'] = {
+  init: function() {
+    this.appendDummyInput().appendField("side distance (mm)");
+    this.setOutput(true, "Number");
+    this.setColour("#FFD400");
+    this.setTooltip("Side distance in mm; 9999 = no sensor or out of range.");
+  }
+};
+ 
+Blockly.Blocks['robot_on_line'] = {
+  init: function() {
+    this.appendDummyInput().appendField("on the line?");
+    this.setOutput(true, "Boolean");
+    this.setColour("#FFD400");
+    this.setTooltip("True if the line sensor sees the line.");
+  }
+};
+ 
+Blockly.Blocks['robot_button'] = {
+  init: function() {
+    this.appendDummyInput().appendField("button pressed?");
+    this.setOutput(true, "Boolean");
+    this.setColour("#FFD400");
+    this.setTooltip("True while the BOOT button is held.");
+  }
+};
+ 
+Blockly.Blocks['robot_led'] = {
+  init: function() {
+    this.appendDummyInput()
+        .appendField("turn LED")
+        .appendField(new Blockly.FieldDropdown([["on","True"], ["off","False"]]), "STATE");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Blue LED on or off.");
+  }
+};
+ 
+Blockly.Blocks['robot_show'] = {
+  init: function() {
+    this.appendValueInput("TEXT").appendField("show");
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Show text on the robot's screen (updates within half a second).");
+  }
+};
+

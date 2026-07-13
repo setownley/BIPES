@@ -153,6 +153,8 @@ class Tool {
   static stopPython () {
     //Send Ctrl+C to stop program
     mux.bufferPush ('\x03\x03');
+	//Classroom safety: always stop motors after interrupting the program
+    mux.bufferPush ('\rimport robot; robot.stop()\r');
   }
   static softReset () {
     if (Channel ['websocket'].connected)
@@ -541,6 +543,24 @@ class files {
   /**
    * Get file from ``codemirror``editor and calls :js:func:`Files.put_file` to upload.
    */
+  /**
+   * One-click: generate Python from the block workspace and save it to the
+   * board as main.py (runs automatically on every power-up / RESET).
+   */
+  save_main () {
+    if (!mux.connected ()) {
+      UI ['notify'].send ('Connect to the robot first, then try again.');
+      return;
+    }
+	let codeStr = 'import robot\nrobot.cal_gate()\n' + Blockly.Python.workspaceToCode (Code.workspace);
+    var bufCode = new Uint8Array (codeStr.length);
+    for (var i = 0, strLen = codeStr.length; i < strLen; i++) {
+      bufCode [i] = codeStr.charCodeAt (i);
+    }
+    this.put_file_name = 'main.py';
+    this.put_file_data = bufCode;
+    this.put_file ();
+  }
   files_save_as () {
 
     //For codemirror
