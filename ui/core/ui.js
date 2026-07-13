@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 function get (e) {return document.querySelector (e); }
 function getIn (a, b) {return a.querySelector (b); }
 function getAll (e, f) {return get (e).querySelectorAll (f); }
@@ -470,7 +470,7 @@ class progress {
  */
 class workspace {
   constructor () {
-    if (window.location.pathname.includes ('index.html') && window.location.protocol == 'file:') {
+    if (false) {   // classroom fork: index.html IS our offline version
       alert('You will now be redirected to the offline version.');
       window.location.replace("index_offline.html");
     }
@@ -829,6 +829,7 @@ workspace.prototype.loadDataboard = function (JSON_) {
     UI ['notify'].log(e);
   }
 }
+
 
 
 
