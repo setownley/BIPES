@@ -6449,3 +6449,26 @@ Blockly.Python['robot_turn90'] = function(block) {
   Blockly.Python.definitions_['import_robot'] = 'import robot';
   return "robot.turn90('" + block.getFieldValue('DIR') + "')\n";
 };
+
+/* ---- Nudge + manual trim generators (robot.py v0.5.4) ---- */
+Blockly.Python['robot_nudge'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  var s = Blockly.Python.valueToCode(block, 'SECS', Blockly.Python.ORDER_NONE) || '0';
+  return "robot.nudge('" + block.getFieldValue('DIR') + "', " + s + ")\n";
+};
+Blockly.Python['robot_trim_adjust'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  var p = Blockly.Python.valueToCode(block, 'PCT', Blockly.Python.ORDER_NONE) || '0';
+  return "robot.trim_adjust('" + block.getFieldValue('WHEEL') + "', " + p + ")\n";
+};
+Blockly.Python['robot_trim_save'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  return "robot.save_trim()\n";
+};
+
+/* ---- turn N degrees generator ---- */
+Blockly.Python['robot_turn_deg'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  var deg = Blockly.Python.valueToCode(block, 'DEG', Blockly.Python.ORDER_NONE) || '0';
+  return "robot.turn_degrees('" + block.getFieldValue('DIR') + "', " + deg + ")\n";
+};

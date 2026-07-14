@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "0.5.1"  # must match the block set deployed in the BIPES fork
+VERSION = "0.5.4"  # must match the block set deployed in the BIPES fork
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -59,6 +59,7 @@ MAZE_MAX_STEER = 0.12
 MAZE_ADVANCE_MM = 230       # parks the PIVOT at gap center: 120 (sensor->axle) + 150 (half gap) - ~40 (debounce travel)
 MAZE_GAP_MM = 450           # 1.5 cells with no wall = treat as open
 MAZE_SPEED = "slow"         # 290 mm/s: 29 mm/tick staleness
+NUDGE_SLOW = 0.55           # nudged wheel runs at this fraction of the other
 OLED_EVERY_N_TICKS = 5      # dashboard repaint cadence = 500 ms
 CAL_FILE = "qre_cal.txt"
 TRIM_FILE = "trim_cal.txt"      # per-robot straight-drive trim (v0.3.0)
@@ -586,22 +587,84 @@ def left_open():
 def front_blocked():
     return _last_event == "front"
 
-def turn90(direction="left"):
-    """Timed 90-degree spin using the calibrated t90 from maze_cal.json."""
-    t = None
+def nudge(direction="left", seconds=0.3):
+    """Creep forward with one wheel slowed - a small steering correction.
+    'left' curves left (left wheel slowed). Uses medium speed."""
+    try:
+        s = float(seconds)
+    except (TypeError, ValueError):
+        s = 0
+    s = min(max(s, 0), 5)                   # clamp 0-5 s
+    if s == 0:
+        return
+    base = _speed("medium")
+    slow = int(base * NUDGE_SLOW)
+    if str(direction).lower() == "left":
+        left, right = slow, base
+    else:
+        left, right = base, slow
+    if LEFT_MOTOR == "A":
+        da, db = left, right
+    else:
+        da, db = right, left
+    _motors(da, False, db, False)           # ramped launch, trim applied
+    time.sleep(s)
+    stop()
+
+def turn_degrees(direction="left", degrees=90):
+    """Spin a chosen angle by scaling this robot's calibrated t90.
+
+    HONEST LIMITS (open-loop, no gyro):
+      - accurate roughly 20-180 deg; linear scaling of a single measured point
+      - BELOW ~15 deg the launch ramp dominates and it will under-rotate
+      - large angles accumulate error; 450 deg is the hard cap
+      - battery level and floor surface shift the result
+    """
+    try:
+        d = float(degrees)
+    except (TypeError, ValueError):
+        d = 0
+    d = min(max(d, 0), 450)                 # clamp per the block's range
+    if d == 0:
+        return
+    t90 = None
     try:
         import json
         with open(MAZE_CAL_FILE) as f:
-            t = json.load(f).get("t90_" + str(direction).lower())
+            t90 = json.load(f).get("t90_" + str(direction).lower())
     except (OSError, ValueError, ImportError):
         pass
-    if t is None:
+    if t90 is None:
         print("robot: t90 not calibrated - run bench turn section")
         return
+    t = t90 * d / 90.0
     stop()
     turn(direction)
     time.sleep(t)
     stop()
+
+def turn90(direction="left"):
+    """90-degree spin (kept as its own call; now a thin wrapper)."""
+    turn_degrees(direction, 90)
+
+def trim_adjust(wheel="left", percent=2):
+    """TEACHER/CAL BLOCK: run ONE wheel at (100 - percent)%, the other at 100%.
+
+    ABSOLUTE, not cumulative: running this twice with 2 does the same thing as
+    running it once with 2. The kid raises the number until the robot drives
+    straight, then runs 'save trim' once."""
+    try:
+        p = float(percent)
+    except (TypeError, ValueError):
+        return get_trim()
+    p = min(max(p, 0), 50) / 100.0          # clamp 0-50%
+    ch = "A" if (str(wheel).lower() == "left") == (LEFT_MOTOR == "A") else "B"
+    if ch == "A":
+        set_trim(a=1.0 - p, b=1.0)          # other wheel always back to full
+    else:
+        set_trim(a=1.0, b=1.0 - p)
+    print("trim now A=%.3f B=%.3f" % (_trim["A"], _trim["B"]))
+    return get_trim()
 
 def set_trim(a=None, b=None):
     """Set straight-drive trim in RAM. Values clamped to 0.5-1.0."""

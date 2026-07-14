@@ -12003,3 +12003,59 @@ Blockly.Blocks['robot_turn90'] = {
     this.setTooltip("Spin exactly 90 degrees using the calibrated turn time.");
   }
 };
+
+/* ---- Nudge + manual trim (robot.py v0.5.4) ---- */
+Blockly.Blocks['robot_nudge'] = {
+  init: function() {
+    this.appendValueInput("SECS")
+        .setCheck("Number")
+        .appendField("nudge")
+        .appendField(new Blockly.FieldDropdown([["left","left"], ["right","right"]]), "DIR");
+    this.appendDummyInput().appendField("seconds");
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Creep forward with one wheel slowed - a small steering correction.");
+  }
+};
+Blockly.Blocks['robot_trim_adjust'] = {
+  init: function() {
+    this.appendValueInput("PCT")
+        .setCheck("Number")
+        .appendField("CAL: slow the")
+        .appendField(new Blockly.FieldDropdown([["left","left"], ["right","right"]]), "WHEEL")
+        .appendField("wheel by");
+    this.appendDummyInput().appendField("%");
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FF8A00");
+    this.setTooltip("Setup only: run one wheel a bit slower so the robot drives straight. The number is the FINAL setting, not an extra amount - re-running with the same number changes nothing.");
+  }
+};
+Blockly.Blocks['robot_trim_save'] = {
+  init: function() {
+    this.appendDummyInput().appendField("CAL: save trim to robot");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FF8A00");
+    this.setTooltip("Setup only: store the trim on THIS robot so every program drives straight. Run once, then delete the CAL blocks.");
+  }
+};
+
+/* ---- turn N degrees (robot.py v0.5.2+) ---- */
+Blockly.Blocks['robot_turn_deg'] = {
+  init: function() {
+    this.appendValueInput("DEG")
+        .setCheck("Number")
+        .appendField("turn")
+        .appendField(new Blockly.FieldDropdown([["left","left"], ["right","right"]]), "DIR");
+    this.appendDummyInput().appendField("degrees");
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Spin left or right by any angle up to 450 degrees. Small angles (under about 15) are not accurate.");
+  }
+};

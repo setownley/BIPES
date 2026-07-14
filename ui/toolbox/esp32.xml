@@ -11,6 +11,12 @@
 		  <value name="TIME"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
 		</block>
 <block type="robot_turn90"></block>
+<block type="robot_turn_deg">
+  <value name="DEG"><shadow type="math_number"><field name="NUM">90</field></shadow></value>
+</block>
+<block type="robot_nudge">
+  <value name="SECS"><shadow type="math_number"><field name="NUM">0.3</field></shadow></value>
+</block>
 <block type="robot_button"></block>
 <block type="robot_led"></block>
 <block type="robot_distance"></block>
@@ -52,6 +58,10 @@
 
 
 
+<block type="robot_trim_adjust">
+  <value name="PCT"><shadow type="math_number"><field name="NUM">2</field></shadow></value>
+</block>
+<block type="robot_trim_save"></block>
 </category>
   <category name="%{BKY_CATLOGIC}" colour="%{BKY_LOGIC_HUE}">
       <block type="controls_if"></block>
@@ -3444,6 +3454,8 @@ _
 </category>
 </category>
 </document>
+
+
 
 
 
