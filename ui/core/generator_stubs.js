@@ -1,4 +1,4 @@
-/*
+﻿/*
  * code generation for BIPES
  *
  */
@@ -466,7 +466,7 @@ Blockly.Python['write_oled_int'] = function(block) {
 	var y = Blockly.Python.valueToCode(block, 'y', Blockly.Python.ORDER_ATOMIC);
 	var value = Blockly.Python.valueToCode(block, 'value', Blockly.Python.ORDER_ATOMIC);
   
-	// Código para definir a posição no display e imprimir o valor
+	// CÃ³digo para definir a posiÃ§Ã£o no display e imprimir o valor
 	var code = 'oled.text(str(' + value + '), ' + x + ', ' + y + ')\n';
 	
 	return code;
@@ -518,10 +518,10 @@ Blockly.Python['move_servo'] = function(block) {
     var servo_name = block.getFieldValue('servo_name');  
 
     
-    var duty_min = 30;   // Valor mínimo para 0 graus
-    var duty_max = 125;  // Valor máximo para 180 graus
+    var duty_min = 30;   // Valor mÃ­nimo para 0 graus
+    var duty_max = 125;  // Valor mÃ¡ximo para 180 graus
 
-    // Código para converter ângulo em duty cycle
+    // CÃ³digo para converter Ã¢ngulo em duty cycle
     var duty_code = 'int(' + duty_min + ' + (' + value_angle + ' / 180) * (' + duty_max + ' - ' + duty_min + '))';
 
     var code = servo_name + '.duty(' + duty_code + ')\n'; 
@@ -627,18 +627,18 @@ Blockly.Python['dht_init'] = function(block) {
   var value_pin = Blockly.Python.valueToCode(block, 'pin', Blockly.Python.ORDER_ATOMIC);
   var type = block.getFieldValue('DHT_TYPE');
   
-  // Importa as bibliotecas necessárias
+  // Importa as bibliotecas necessÃ¡rias
   Blockly.Python.definitions_['import_pin'] = 'from machine import Pin';
   Blockly.Python.definitions_['import_dht'] = 'import dht';
   Blockly.Python.definitions_['import_time'] = 'import time';
 
-  // Inicializa o sensor e captura a primeira leitura, que será ignorada
+  // Inicializa o sensor e captura a primeira leitura, que serÃ¡ ignorada
   var code = 'dhts = dht.' + type + '(Pin(' + value_pin + '))\n';
   code += 'time.sleep(2)  # Aguardar tempo para estabilizar o sensor\n';
   
   // Tenta a primeira leitura, ignorando o erro se falhar
   code += 'try:\n';
-  code += '    dhts.measure()  # Primeira leitura que será ignorada\n';
+  code += '    dhts.measure()  # Primeira leitura que serÃ¡ ignorada\n';
   code += 'except OSError as e:\n';
   code += '    print("Primeira leitura ignorada devido a erro:", e)\n';
   
@@ -4388,12 +4388,12 @@ Blockly.Python['thread'] = function(block) {
   return code;
 };
 
-//Novo bloco para iniciar a função thread
+//Novo bloco para iniciar a funÃ§Ã£o thread
 Blockly.Python['iniciar_thread'] = function(block) {
-	// Adiciona a importação do módulo _thread se ainda não tiver sido adicionado
+	// Adiciona a importaÃ§Ã£o do mÃ³dulo _thread se ainda nÃ£o tiver sido adicionado
 	Blockly.Python.definitions_['import_thread'] = 'import _thread';
   
-	// Gera o código para iniciar uma nova thread
+	// Gera o cÃ³digo para iniciar uma nova thread
 	var function_name = Blockly.Python.valueToCode(block, 'FUNCTION', Blockly.Python.ORDER_ATOMIC);
 	var code = '_thread.start_new_thread(' + function_name + ', ())\n';
 	return code;
@@ -5465,7 +5465,7 @@ Blockly.Python['dc_motor_init'] = function(block) {
 	var code = motor_name + '_pin_a = Pin(' + dir1 + ', Pin.OUT)\n';
 	code += motor_name + '_pin_b = Pin(' + dir2 + ', Pin.OUT)\n';
 	code += motor_name + '_pwm = PWM(Pin(' + pwm + '))\n';
-	code += motor_name + '_pwm.freq(1000)\n';  // Definindo a frequência do PWM
+	code += motor_name + '_pwm.freq(1000)\n';  // Definindo a frequÃªncia do PWM
   
 	return code;
   };
@@ -6097,12 +6097,12 @@ Blockly.Python['cell_value'] = function(block) {
   var code = value_value;
   return code;
 };
-// Gerando os códigos dos Blocos do Pluviômetro
-// Iniciar Pluviômetro
+// Gerando os cÃ³digos dos Blocos do PluviÃ´metro
+// Iniciar PluviÃ´metro
 Blockly.Python['pluvio_init'] = function(block) {
 	Blockly.Python.definitions_['import_machine'] = 'import machine';
 	
-	var value_handler = Blockly.Python.valueToCode(block, 'Função', Blockly.Python.ORDER_ATOMIC);
+	var value_handler = Blockly.Python.valueToCode(block, 'FunÃ§Ã£o', Blockly.Python.ORDER_ATOMIC);
 	var value_pin = Blockly.Python.valueToCode(block, 'pin', Blockly.Python.ORDER_ATOMIC);
 
   
@@ -6110,21 +6110,21 @@ Blockly.Python['pluvio_init'] = function(block) {
   
 	return code;
 };
-// Parar Pluviômetro
+// Parar PluviÃ´metro
 Blockly.Python['pluvio_stop'] = function(block){
 	Blockly.Python.definitions_['import_machine'] = 'import machine';
 
-	var value_handler = Blockly.Python.valueToCode(block, 'Função', Blockly.Python.ORDER_ATOMIC);
+	var value_handler = Blockly.Python.valueToCode(block, 'FunÃ§Ã£o', Blockly.Python.ORDER_ATOMIC);
 
 	var code = 'pluviometro.irq(trigger=0,handler='+value_handler.replace('\'','').replace('\'','')+')\n';
 	return code;
 };
-//Gerando os códigos dos Blocos do Anemômetro
-// Iniciar Anemômetro
+//Gerando os cÃ³digos dos Blocos do AnemÃ´metro
+// Iniciar AnemÃ´metro
 Blockly.Python['anemo_init'] = function(block) {
 	Blockly.Python.definitions_['import_machine'] = 'import machine';
 	
-	var value_handler = Blockly.Python.valueToCode(block, 'Função', Blockly.Python.ORDER_ATOMIC);
+	var value_handler = Blockly.Python.valueToCode(block, 'FunÃ§Ã£o', Blockly.Python.ORDER_ATOMIC);
 	var value_pin = Blockly.Python.valueToCode(block, 'pin', Blockly.Python.ORDER_ATOMIC);
 
   
@@ -6132,22 +6132,22 @@ Blockly.Python['anemo_init'] = function(block) {
   
 	return code;
 };
-// Parar Anemômetro
+// Parar AnemÃ´metro
 Blockly.Python['anemo_stop'] = function(block){
 	Blockly.Python.definitions_['import_machine'] = 'import machine';
 
-	var value_handler = Blockly.Python.valueToCode(block, 'Função', Blockly.Python.ORDER_ATOMIC);
+	var value_handler = Blockly.Python.valueToCode(block, 'FunÃ§Ã£o', Blockly.Python.ORDER_ATOMIC);
 
 	var code = 'anemometro.irq(trigger=0,handler='+value_handler.replace('\'','').replace('\'','')+')\n';
 	return code;
 };
-// Gerando código dos blocos de interrupção
-// Iniciar Interrupção
+// Gerando cÃ³digo dos blocos de interrupÃ§Ã£o
+// Iniciar InterrupÃ§Ã£o
 Blockly.Python['inter_init'] = function(block){
 	Blockly.Python.definitions_['import_machine'] = 'import machine';
 
 	var value_nome = Blockly.Python.valueToCode(block, 'Nome', Blockly.Python.ORDER_ATOMIC);
-	var value_handler = Blockly.Python.valueToCode(block, 'Função', Blockly.Python.ORDER_ATOMIC);
+	var value_handler = Blockly.Python.valueToCode(block, 'FunÃ§Ã£o', Blockly.Python.ORDER_ATOMIC);
 	var value_pin = Blockly.Python.valueToCode(block, 'pin', Blockly.Python.ORDER_ATOMIC);
 
 	var code = ''+value_nome.replace('\'','').replace('\'','')+'=machine.Pin('+value_pin+', machine.Pin.IN, machine.Pin.PULL_UP) \n'+value_nome.replace('\'','').replace('\'','')+'.irq(trigger=machine.Pin.IRQ_FALLING, handler='+ value_handler.replace('\'','').replace('\'','')+')\n';
@@ -6220,11 +6220,11 @@ class BLEUART:
         self._connections = set()
         self._payload = advertising_payload(name=name, appearance=_ADV_APPEARANCE_GENERIC_COMPUTER)
         self._advertise()
-        self._handler = None  # Adiciona o atributo handler para armazenar a função de callback
-        print("BLE Inicializado e anúncio iniciado.")
+        self._handler = None  # Adiciona o atributo handler para armazenar a funÃ§Ã£o de callback
+        print("BLE Inicializado e anÃºncio iniciado.")
 
     def irq(self, handler):
-        # Método para registrar a função de callback
+        # MÃ©todo para registrar a funÃ§Ã£o de callback
         self._handler = handler
 
     def _irq(self, event, data):
@@ -6258,7 +6258,7 @@ class BLEUART:
 
     def _advertise(self, interval_us=500000):
         self._ble.gap_advertise(interval_us, adv_data=self._payload)
-        print("Anúncio de Bluetooth ativo.")
+        print("AnÃºncio de Bluetooth ativo.")
 
 ble = bluetooth.BLE()
 uart = BLEUART(ble, name="${bluetooth_name}")
@@ -6268,12 +6268,12 @@ received_data = None
 };
 
 Blockly.Python['handle_ble_data'] = function(block) {
-  var variable = Blockly.Python.valueToCode(block, 'VAR', Blockly.Python.ORDER_ATOMIC);  // Obtém a variável selecionada pelo usuário
+  var variable = Blockly.Python.valueToCode(block, 'VAR', Blockly.Python.ORDER_ATOMIC);  // ObtÃ©m a variÃ¡vel selecionada pelo usuÃ¡rio
   var code = `def handle_ble_data():\n` +
-             `    global received_data, ${variable}  # Declara received_data e a variável escolhida como globais\n` +
+             `    global received_data, ${variable}  # Declara received_data e a variÃ¡vel escolhida como globais\n` +
              `    if received_data:\n` +  
-             `        ${variable} = received_data  # Armazena os dados recebidos na variável escolhida\n` +
-             `        received_data = None  # Limpa os dados após o processamento\n`;
+             `        ${variable} = received_data  # Armazena os dados recebidos na variÃ¡vel escolhida\n` +
+             `        received_data = None  # Limpa os dados apÃ³s o processamento\n`;
   return code;
 };
 
@@ -6297,26 +6297,26 @@ Blockly.Python['configurar_plotter_dados'] = function(block) {
   var sensorCount = block.sensorCount_;
   var code = 'def formatar_dados_para_plotter():\n';
   
-  // Lista para armazenar as variáveis dos sensores
+  // Lista para armazenar as variÃ¡veis dos sensores
   var sensorVars = [];
 
-  // Gera código para pegar os valores dos sensores
+  // Gera cÃ³digo para pegar os valores dos sensores
   for (var i = 0; i < sensorCount; i++) {
     var sensor = Blockly.Python.valueToCode(block, 'SENSOR_' + i, Blockly.Python.ORDER_ATOMIC);
     if (sensor) {
-      sensorVars.push(sensor);  // Adiciona o sensor à lista de variáveis
-      code += '    global ' + sensor + '\n';  // Declara a variável como global
+      sensorVars.push(sensor);  // Adiciona o sensor Ã  lista de variÃ¡veis
+      code += '    global ' + sensor + '\n';  // Declara a variÃ¡vel como global
     }
   }
 
-  // Verifica se há sensores e gera o código de envio para o plotter
+  // Verifica se hÃ¡ sensores e gera o cÃ³digo de envio para o plotter
   if (sensorVars.length > 0) {
     // Formata a string de dados para incluir todos os sensores
     var plotterData = sensorVars.map(function(sensor, index) {
       return `{}`;  // Um placeholder '{}' para cada sensor
-    }).join(', ');  // Separe os sensores por vírgula
+    }).join(', ');  // Separe os sensores por vÃ­rgula
     
-    // Gera a linha de código com todos os sensores
+    // Gera a linha de cÃ³digo com todos os sensores
     code += '    plotter_data = "' + plotterData + '{}".format(' + sensorVars.join(', ') + ', chr(0x0A))\n';
     
     // Envia os dados via Bluetooth
@@ -6333,7 +6333,7 @@ Blockly.Python['configurar_plotter_dados'] = function(block) {
 
 Blockly.Python['enviar_dados_ble'] = function(block) {
   var code = `
-formatar_dados_para_plotter()  # Chama a função que formata e envia os dados ao plotter
+formatar_dados_para_plotter()  # Chama a funÃ§Ã£o que formata e envia os dados ao plotter
   `;
   return code;
 };
@@ -6374,7 +6374,7 @@ Blockly.Python['robot_distance'] = function(block) {
   return ['robot.distance_mm()', Blockly.Python.ORDER_ATOMIC];
 };
 
-/* ---- Classroom robot generators, batch 2 — APPEND to ui/core/generator_stubs.js ---- */
+/* ---- Classroom robot generators, batch 2 â€” APPEND to ui/core/generator_stubs.js ---- */
  
 Blockly.Python['robot_backward'] = function(block) {
   Blockly.Python.definitions_['import_robot'] = 'import robot';
@@ -6451,11 +6451,6 @@ Blockly.Python['robot_turn90'] = function(block) {
 };
 
 /* ---- Nudge + manual trim generators (robot.py v0.5.4) ---- */
-Blockly.Python['robot_nudge'] = function(block) {
-  Blockly.Python.definitions_['import_robot'] = 'import robot';
-  var s = Blockly.Python.valueToCode(block, 'SECS', Blockly.Python.ORDER_NONE) || '0';
-  return "robot.nudge('" + block.getFieldValue('DIR') + "', " + s + ")\n";
-};
 Blockly.Python['robot_trim_adjust'] = function(block) {
   Blockly.Python.definitions_['import_robot'] = 'import robot';
   var p = Blockly.Python.valueToCode(block, 'PCT', Blockly.Python.ORDER_NONE) || '0';
@@ -6471,4 +6466,12 @@ Blockly.Python['robot_turn_deg'] = function(block) {
   Blockly.Python.definitions_['import_robot'] = 'import robot';
   var deg = Blockly.Python.valueToCode(block, 'DEG', Blockly.Python.ORDER_NONE) || '0';
   return "robot.turn_degrees('" + block.getFieldValue('DIR') + "', " + deg + ")\n";
+};
+
+
+/* ---- nudge generator ---- */
+Blockly.Python['robot_nudge'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  var deg = Blockly.Python.valueToCode(block, 'DEG', Blockly.Python.ORDER_NONE) || '0';
+  return "robot.nudge('" + block.getFieldValue('DIR') + "', " + deg + ")\n";
 };

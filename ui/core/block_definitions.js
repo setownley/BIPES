@@ -1,4 +1,4 @@
-Blockly.Blocks['pwm'] = {
+﻿Blockly.Blocks['pwm'] = {
   init: function(){
     this.appendDummyInput()
         .appendField("PWM #")
@@ -484,16 +484,16 @@ Blockly.Blocks['thread'] = {
   }
 };
 
-//Novo bloco para criar uma função thread para rodar loops em paralelo
+//Novo bloco para criar uma funÃ§Ã£o thread para rodar loops em paralelo
 Blockly.Blocks['iniciar_thread'] = {
   init: function() {
       this.appendValueInput("FUNCTION")
           .setCheck("Function")
-          .appendField("Iniciar tarefa paralela com a função");
+          .appendField("Iniciar tarefa paralela com a funÃ§Ã£o");
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);
       this.setColour(230);
-      this.setTooltip("Inicia uma nova thread para executar a função especificada.");
+      this.setTooltip("Inicia uma nova thread para executar a funÃ§Ã£o especificada.");
       this.setHelpUrl("");
   }
 };
@@ -1162,20 +1162,20 @@ Blockly.Blocks['write_oled_int'] = {
     this.appendDummyInput()
         .appendField("Print value on display");
 
-    // Campo para a posição X no display
+    // Campo para a posiÃ§Ã£o X no display
     this.appendValueInput("x")
         .setCheck("Number")
         .setAlign(Blockly.ALIGN_RIGHT)
         .appendField("X position");
         
 
-    // Campo para a posição Y no display
+    // Campo para a posiÃ§Ã£o Y no display
     this.appendValueInput("y")
         .setCheck("Number")
         .setAlign(Blockly.ALIGN_RIGHT)
         .appendField("Y position");
 
-    // Campo para o valor inteiro que será impresso
+    // Campo para o valor inteiro que serÃ¡ impresso
     this.appendValueInput("value")
         .setCheck("Number")
         .setAlign(Blockly.ALIGN_RIGHT)
@@ -1185,7 +1185,7 @@ Blockly.Blocks['write_oled_int'] = {
     this.setNextStatement(true, null);
     this.setColour(230);
 
-    this.setTooltip("Mostre um valor inteiro em uma posição especifica no display oled");
+    this.setTooltip("Mostre um valor inteiro em uma posiÃ§Ã£o especifica no display oled");
     this.setHelpUrl("http://www.bipes.net.br");
   }
 };
@@ -2459,7 +2459,7 @@ Blockly.Blocks['simulate_water_boiler'] = {
         .appendField("Water Boiler #")
         .appendField(new Blockly.FieldNumber(0, 0, 9), "ID");
     this.appendDummyInput()
-        .appendField("Dissipation rate (ΔºC/ms)")
+        .appendField("Dissipation rate (Î”ÂºC/ms)")
         .appendField(new Blockly.FieldNumber(0.02, 0), "DISSIPATION");
     this.appendValueInput("POWER")
         .setCheck(null)
@@ -2468,7 +2468,7 @@ Blockly.Blocks['simulate_water_boiler'] = {
     this.setInputsInline(false);
     this.setOutput(true, null);
     this.setColour('#666666');
-    this.setTooltip("Simulate Water Boiler temperature with power input, returns water temperature. Runs at precision of milliseconds. Uses 20ºC as room temperature.");
+    this.setTooltip("Simulate Water Boiler temperature with power input, returns water temperature. Runs at precision of milliseconds. Uses 20ÂºC as room temperature.");
     this.setHelpUrl("https://github.com/JorgeGMarques/micropython-simple-pid/blob/master/examples/water_boiler/water_boiler_pid.py");
   }
 };
@@ -2481,7 +2481,7 @@ Blockly.Blocks['simulate_dcmotor.sim'] = {
         .appendField(new Blockly.FieldNumber(0, 0, 9), "ID");
     this.appendDummyInput()
         .setAlign(Blockly.ALIGN_CENTRE)
-        .appendField("Ra(Ω)")
+        .appendField("Ra(â„¦)")
         .appendField(new Blockly.FieldNumber(0.52, 0), "RA")
         .appendField("La(H)")
         .appendField(new Blockly.FieldNumber(0.000036, 0), "LA")
@@ -2489,7 +2489,7 @@ Blockly.Blocks['simulate_dcmotor.sim'] = {
         .setAlign(Blockly.ALIGN_CENTRE)
         .appendField("B(Nm)")
         .appendField(new Blockly.FieldNumber(0.00001, 0), "B")
-        .appendField("J(kgm²)")
+        .appendField("J(kgmÂ²)")
         .appendField(new Blockly.FieldNumber(0.000012, 0), "J");
     this.appendDummyInput()
         .setAlign(Blockly.ALIGN_CENTRE)
@@ -2520,7 +2520,7 @@ Blockly.Blocks['simulate_dcmotor.vars'] = {
         .appendField("get DC Motor #")
         .appendField(new Blockly.FieldNumber(0, 0, 9), "ID")
         .appendField(".")
-        .appendField(new Blockly.FieldDropdown([["Va(V)","va"], ["Ia(A)","ia"], ["omega(RPM)","omega"], ["theta(kgm²)","theta"], ["static friction (Nm)","STATIC_FRICTION"], ["Bemf(V)","bemf"], ["torque (Nm)","Te"], ["Load torque (Nm)","Tl"], ["last time","_last_time"]]), "VARS");
+        .appendField(new Blockly.FieldDropdown([["Va(V)","va"], ["Ia(A)","ia"], ["omega(RPM)","omega"], ["theta(kgmÂ²)","theta"], ["static friction (Nm)","STATIC_FRICTION"], ["Bemf(V)","bemf"], ["torque (Nm)","Te"], ["Load torque (Nm)","Tl"], ["last time","_last_time"]]), "VARS");
     this.setInputsInline(false);
     this.setOutput(true, null);
     this.setColour('#666666');
@@ -10812,7 +10812,7 @@ Blockly.Blocks['HSL_to_RGB'] = {
     this.setInputsInline(true);
     this.setOutput(true, null);
     this.setColour(230);
-    this.setTooltip("HUE to RGB color, Hue from 0º to 360º, Saturation and Lightness from 0% to 100%.");
+    this.setTooltip("HUE to RGB color, Hue from 0Âº to 360Âº, Saturation and Lightness from 0% to 100%.");
     this.setHelpUrl("https://bipes.net.br/wp/?page_id=177");
   },
 
@@ -11475,8 +11475,8 @@ Blockly.Blocks['cell_value'] = {
  this.setHelpUrl("");
   }
 };
-// Blocos do Pluviômetro
-// Iniciar Pluviômetro
+// Blocos do PluviÃ´metro
+// Iniciar PluviÃ´metro
 Blockly.Blocks['pluvio_init']={
   init: function(){
     this.appendDummyInput()
@@ -11485,11 +11485,11 @@ Blockly.Blocks['pluvio_init']={
                      70,
                      70,
                      "*"))
-        .appendField("Iniciar Pluiômetro");
-        this.appendValueInput("Função")
+        .appendField("Iniciar PluiÃ´metro");
+        this.appendValueInput("FunÃ§Ã£o")
         .setCheck("String")
         .setAlign(Blockly.ALIGN_RIGHT)
-        .appendField("Função");
+        .appendField("FunÃ§Ã£o");
     this.appendValueInput("pin")
         .setCheck("Number")
         .setAlign(Blockly.ALIGN_RIGHT)
@@ -11499,22 +11499,22 @@ Blockly.Blocks['pluvio_init']={
         this.setColour(100);
 }
 };
-// Parar Pluviômetro
+// Parar PluviÃ´metro
 Blockly.Blocks['pluvio_stop'] = {
   init: function(){
     this.appendDummyInput()
-        .appendField(new Blockly.FieldLabelSerializable("Parar Plviômetro"), "STOP_PLUVIO");
-    this.appendValueInput("Função")
+        .appendField(new Blockly.FieldLabelSerializable("Parar PlviÃ´metro"), "STOP_PLUVIO");
+    this.appendValueInput("FunÃ§Ã£o")
         .setCheck("String")
         .setAlign(Blockly.ALIGN_RIGHT)
-        .appendField("Função");
+        .appendField("FunÃ§Ã£o");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(100);
   }
 };
-//Blocos Anemômetro
-// Iniciar Anemômetro
+//Blocos AnemÃ´metro
+// Iniciar AnemÃ´metro
 Blockly.Blocks['anemo_init'] = {
   init: function(){
     this.appendDummyInput()
@@ -11523,12 +11523,12 @@ Blockly.Blocks['anemo_init'] = {
                      55,
                      55,
                      "*"))
-        .appendField("Iniciar Anenômetro");
+        .appendField("Iniciar AnenÃ´metro");
 
-    this.appendValueInput("Função")
+    this.appendValueInput("FunÃ§Ã£o")
         .setCheck("String")
         .setAlign(Blockly.ALIGN_RIGHT)
-        .appendField("Função");
+        .appendField("FunÃ§Ã£o");
     this.appendValueInput("pin")
         .setCheck("Number")
         .setAlign(Blockly.ALIGN_RIGHT)
@@ -11539,22 +11539,22 @@ Blockly.Blocks['anemo_init'] = {
   }
 };
 
-//Parar Anemômetro
+//Parar AnemÃ´metro
 Blockly.Blocks['anemo_stop'] = {
   init: function(){
     this.appendDummyInput()
-        .appendField(new Blockly.FieldLabelSerializable("Parar Anenômetro"), "STOP_ANENO");
-    this.appendValueInput("Função")
+        .appendField(new Blockly.FieldLabelSerializable("Parar AnenÃ´metro"), "STOP_ANENO");
+    this.appendValueInput("FunÃ§Ã£o")
         .setCheck("String")
         .setAlign(Blockly.ALIGN_RIGHT)
-        .appendField("Função");
+        .appendField("FunÃ§Ã£o");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(255,0,0);
   }
 };
-//Blocos de Interrupção
-// Iniciar interrupção
+//Blocos de InterrupÃ§Ã£o
+// Iniciar interrupÃ§Ã£o
 Blockly.Blocks['inter_init'] = {
   init: function(){
     this.appendDummyInput()
@@ -11563,15 +11563,15 @@ Blockly.Blocks['inter_init'] = {
         55,
         55,
         "*"))
-        .appendField("Iniciar Interrupção");
+        .appendField("Iniciar InterrupÃ§Ã£o");
     this.appendValueInput("Nome")
         .setCheck("String")
         .setAlign(Blockly.ALIGN_RIGHT)
         .appendField("Nome");
-    this.appendValueInput("Função")
+    this.appendValueInput("FunÃ§Ã£o")
         .setCheck("String")
         .setAlign(Blockly.ALIGN_RIGHT)
-        .appendField("Função");
+        .appendField("FunÃ§Ã£o");
     this.appendValueInput("pin")
         .setCheck("Number")
         .setAlign(Blockly.ALIGN_RIGHT)
@@ -11601,12 +11601,12 @@ Blockly.Blocks['try_catch'] = {
 
 Blockly.Blocks['try_except_oserror'] = {
   init: function() {
-    this.appendDummyInput().appendField("try");  // Título do bloco 'try'
+    this.appendDummyInput().appendField("try");  // TÃ­tulo do bloco 'try'
     this.appendStatementInput("TRY").setCheck(null);  // Blocos encaixados no 'try'
     this.appendDummyInput().appendField("except OSError");
     this.appendStatementInput("EXCEPT").setCheck(null);  // Blocos encaixados no 'except'
     this.setPreviousStatement(true, null);  // Adiciona a curvinha superior (permite encaixar)
-    this.setNextStatement(true, null);  // Adiciona a curvinha inferior (permite sequência)
+    this.setNextStatement(true, null);  // Adiciona a curvinha inferior (permite sequÃªncia)
     this.setColour(230);  // Cor do bloco
     this.setTooltip("Bloco try-except para capturar OSError.");
     this.setHelpUrl("");
@@ -11657,13 +11657,13 @@ Blockly.Blocks['configurar_e_iniciar_bluetooth'] = {
 
 Blockly.Blocks['handle_ble_data'] = {
   init: function() {
-    this.appendValueInput("VAR")  // Entrada para o nome da variável
+    this.appendValueInput("VAR")  // Entrada para o nome da variÃ¡vel
         .setCheck("Variable")
         .appendField("Definir dados BLE recebidos para");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);
-    this.setTooltip("Recebe os dados BLE e armazena na variável escolhida.");
+    this.setTooltip("Recebe os dados BLE e armazena na variÃ¡vel escolhida.");
     this.setHelpUrl("");
   }
 };
@@ -11678,7 +11678,7 @@ Blockly.Blocks['verificar_dados_ble'] = {
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(65);
-    this.setTooltip("Verifica se há dados recebidos via BLE e chama a função handle_ble_data.");
+    this.setTooltip("Verifica se hÃ¡ dados recebidos via BLE e chama a funÃ§Ã£o handle_ble_data.");
     this.setHelpUrl("");
   }
 };
@@ -11708,7 +11708,7 @@ Blockly.Blocks['configurar_plotter_dados'] = {
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);
-    this.setTooltip("Configura o plotter para enviar dados de múltiplos sensores.");
+    this.setTooltip("Configura o plotter para enviar dados de mÃºltiplos sensores.");
     this.setHelpUrl("");
   },
   mutationToDom: function() {
@@ -11772,12 +11772,12 @@ Blockly.Blocks['chamar_formatar_dados_plotter'] = {
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(160);
-    this.setTooltip("Chama a função que formata e envia os dados ao plotter");
+    this.setTooltip("Chama a funÃ§Ã£o que formata e envia os dados ao plotter");
     this.setHelpUrl("");
   }
 };
 
-// Bloco de contêiner do mutator (sensor container)
+// Bloco de contÃªiner do mutator (sensor container)
 Blockly.Blocks['sensor_container'] = {
   init: function() {
     this.appendDummyInput()
@@ -11836,7 +11836,7 @@ Blockly.Blocks['math_max'] = {
 };
 
 
-/* ---- Classroom robot blocks, batch 2 (robot.py v0.2.0) — APPEND to ui/core/block_definitions.js ---- */
+/* ---- Classroom robot blocks, batch 2 (robot.py v0.2.0) â€” APPEND to ui/core/block_definitions.js ---- */
 
 Blockly.Blocks['robot_forward'] = {
   init: function() {
@@ -12005,20 +12005,6 @@ Blockly.Blocks['robot_turn90'] = {
 };
 
 /* ---- Nudge + manual trim (robot.py v0.5.4) ---- */
-Blockly.Blocks['robot_nudge'] = {
-  init: function() {
-    this.appendValueInput("SECS")
-        .setCheck("Number")
-        .appendField("nudge")
-        .appendField(new Blockly.FieldDropdown([["left","left"], ["right","right"]]), "DIR");
-    this.appendDummyInput().appendField("seconds");
-    this.setInputsInline(true);
-    this.setPreviousStatement(true, null);
-    this.setNextStatement(true, null);
-    this.setColour("#FFD400");
-    this.setTooltip("Creep forward with one wheel slowed - a small steering correction.");
-  }
-};
 Blockly.Blocks['robot_trim_adjust'] = {
   init: function() {
     this.appendValueInput("PCT")
@@ -12057,5 +12043,22 @@ Blockly.Blocks['robot_turn_deg'] = {
     this.setNextStatement(true, null);
     this.setColour("#FFD400");
     this.setTooltip("Spin left or right by any angle up to 450 degrees. Small angles (under about 15) are not accurate.");
+  }
+};
+
+
+/* ---- nudge while driving (robot.py v0.5.6) ---- */
+Blockly.Blocks['robot_nudge'] = {
+  init: function() {
+    this.appendValueInput("DEG")
+        .setCheck("Number")
+        .appendField("nudge")
+        .appendField(new Blockly.FieldDropdown([["left","left"], ["right","right"]]), "DIR");
+    this.appendDummyInput().appendField("degrees");
+    this.setInputsInline(true);
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour("#FFD400");
+    this.setTooltip("Change direction a little while still driving, then keep going at the same speed.");
   }
 };

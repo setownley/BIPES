@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "0.5.4"  # must match the block set deployed in the BIPES fork
+VERSION = "0.5.6"  # must match the block set deployed in the BIPES fork
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -60,6 +60,12 @@ MAZE_ADVANCE_MM = 230       # parks the PIVOT at gap center: 120 (sensor->axle) 
 MAZE_GAP_MM = 450           # 1.5 cells with no wall = treat as open
 MAZE_SPEED = "slow"         # 290 mm/s: 29 mm/tick staleness
 NUDGE_SLOW = 0.55           # nudged wheel runs at this fraction of the other
+# Nudge rate: seconds of nudging per degree of heading change, ESTIMATED from
+# the track width (160 mm), NUDGE_SLOW and the measured medium speed - NOT
+# measured. Expect the real angle to be within roughly a factor of 2. Deliberate
+# choice: nudge is a "bend a bit" tool, not a precision instrument. Tune this
+# ONE number if the class wants nudges closer to the stated angle.
+NUDGE_S_PER_DEG = 0.017
 OLED_EVERY_N_TICKS = 5      # dashboard repaint cadence = 500 ms
 CAL_FILE = "qre_cal.txt"
 TRIM_FILE = "trim_cal.txt"      # per-robot straight-drive trim (v0.3.0)
@@ -296,7 +302,11 @@ def _on_line_raw():
 # ---------------------------------------------------------------------------
 # PUBLIC API — the only functions blocks may call
 # ---------------------------------------------------------------------------
+_cur_speed = "medium"       # last speed requested by forward() - nudge holds it
+
 def forward(speed="medium"):
+    global _cur_speed
+    _cur_speed = speed
     _motors(_speed(speed), False, _speed(speed), False)
 
 def backward(speed="medium"):
@@ -587,17 +597,22 @@ def left_open():
 def front_blocked():
     return _last_event == "front"
 
-def nudge(direction="left", seconds=0.3):
-    """Creep forward with one wheel slowed - a small steering correction.
-    'left' curves left (left wheel slowed). Uses medium speed."""
+def nudge(direction="left", degrees=10):
+    """Bend the heading a little WHILE STILL DRIVING, then carry straight on
+    at the same speed. Motors never stop.
+
+    Angle is an estimate (NUDGE_S_PER_DEG), not a calibrated value - the block
+    deliberately does not promise precision. If the robot is not already
+    driving, this starts it at the last speed used and leaves it driving.
+    """
     try:
-        s = float(seconds)
+        d = float(degrees)
     except (TypeError, ValueError):
-        s = 0
-    s = min(max(s, 0), 5)                   # clamp 0-5 s
-    if s == 0:
+        d = 0
+    d = min(max(d, 0), 180)
+    if d == 0:
         return
-    base = _speed("medium")
+    base = _speed(_cur_speed)               # hold whatever speed we are doing
     slow = int(base * NUDGE_SLOW)
     if str(direction).lower() == "left":
         left, right = slow, base
@@ -607,9 +622,17 @@ def nudge(direction="left", seconds=0.3):
         da, db = left, right
     else:
         da, db = right, left
-    _motors(da, False, db, False)           # ramped launch, trim applied
-    time.sleep(s)
-    stop()
+    _set_forward(da, db)                    # asymmetric: bend
+    time.sleep(d * NUDGE_S_PER_DEG)
+    _set_forward(base, base)                # straight again - STILL DRIVING
+
+def _set_forward(duty_a, duty_b):
+    """Write forward duties directly - no ramp, no stop. Used by nudge so the
+    robot keeps rolling through the correction."""
+    a = ("A2", "A1") if FLIP_A else ("A1", "A2")
+    b = ("B2", "B1") if FLIP_B else ("B1", "B2")
+    _pwm[a[0]].duty(int(duty_a * _trim["A"])); _pwm[a[1]].duty(0)
+    _pwm[b[0]].duty(int(duty_b * _trim["B"])); _pwm[b[1]].duty(0)
 
 def turn_degrees(direction="left", degrees=90):
     """Spin a chosen angle by scaling this robot's calibrated t90.
