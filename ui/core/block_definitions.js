@@ -11972,7 +11972,7 @@ Blockly.Blocks['robot_follow'] = {
     this.appendDummyInput().appendField("follow wall until change");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
-    this.setColour("#FFD400");
+    this.setColour("#F0A800");
     this.setTooltip("Follow the left wall until it opens or something blocks the front.");
   }
 };
@@ -11980,7 +11980,7 @@ Blockly.Blocks['robot_left_open'] = {
   init: function() {
     this.appendDummyInput().appendField("left is open?");
     this.setOutput(true, "Boolean");
-    this.setColour("#FFD400");
+    this.setColour("#F0A800");
     this.setTooltip("True if the last follow ended because the left wall opened.");
   }
 };
@@ -11988,7 +11988,7 @@ Blockly.Blocks['robot_front_blocked'] = {
   init: function() {
     this.appendDummyInput().appendField("blocked in front?");
     this.setOutput(true, "Boolean");
-    this.setColour("#FFD400");
+    this.setColour("#F0A800");
     this.setTooltip("True if the last follow ended at a wall ahead.");
   }
 };
@@ -12062,3 +12062,4 @@ Blockly.Blocks['robot_nudge'] = {
     this.setTooltip("Change direction a little while still driving, then keep going at the same speed.");
   }
 };
+

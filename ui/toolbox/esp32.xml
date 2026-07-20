@@ -20,11 +20,11 @@
 <block type="robot_button"></block>
 <block type="robot_led"></block>
 <block type="robot_distance"></block>
-<block type="robot_front_blocked"></block>
 <block type="robot_on_line"></block>
 <block type="robot_side"></block>
-<block type="robot_left_open"></block>
 <block type="robot_follow"></block>
+<block type="robot_left_open"></block>
+<block type="robot_front_blocked"></block>
 
 
 
@@ -3454,6 +3454,7 @@ _
 </category>
 </category>
 </document>
+
 
 
 
