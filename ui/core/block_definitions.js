@@ -11969,7 +11969,7 @@ Blockly.Blocks['robot_show'] = {
 /* ---- Maze blocks (robot.py v0.5.1) ---- */
 Blockly.Blocks['robot_follow'] = {
   init: function() {
-    this.appendDummyInput().appendField("follow wall until change");
+    this.appendDummyInput().appendField("MAZE: follow wall until change");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour("#F0A800");
@@ -11978,7 +11978,7 @@ Blockly.Blocks['robot_follow'] = {
 };
 Blockly.Blocks['robot_left_open'] = {
   init: function() {
-    this.appendDummyInput().appendField("left is open?");
+    this.appendDummyInput().appendField("MAZE: left is open?");
     this.setOutput(true, "Boolean");
     this.setColour("#F0A800");
     this.setTooltip("True if the last follow ended because the left wall opened.");
@@ -11986,7 +11986,7 @@ Blockly.Blocks['robot_left_open'] = {
 };
 Blockly.Blocks['robot_front_blocked'] = {
   init: function() {
-    this.appendDummyInput().appendField("blocked in front?");
+    this.appendDummyInput().appendField("MAZE: blocked in front?");
     this.setOutput(true, "Boolean");
     this.setColour("#F0A800");
     this.setTooltip("True if the last follow ended at a wall ahead.");
@@ -12062,4 +12062,5 @@ Blockly.Blocks['robot_nudge'] = {
     this.setTooltip("Change direction a little while still driving, then keep going at the same speed.");
   }
 };
+
 
