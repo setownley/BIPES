@@ -696,13 +696,27 @@ class files {
         //mux.bufferPush (`import uos, sys; uos.stat('${src_fname}')\r`);
         mux.bufferPush (`with open('${src_fname}', 'rb') as infile:\rwhile True:\rresult = infile.read(32)\rif result == b'':\rbreak\r\blen = sys.stdout.write(result)\r`, () => {}); //Includes dummy callback due to '>>> '
         mux.bufferPush ("\r\r\r", () => {
+          // Stall-based timeout: the old code gave up after a fixed
+          // 10 x 250 ms = 2.5 s regardless of file size, so any file that
+          // takes longer than that to stream back always failed with
+          // 'Unable to load requested file'. The counter now resets
+          // whenever more bytes arrive, so we only give up after 10 s
+          // of genuine silence.
+          Files.watcher_lastLen = -1;
           this.watcher = setInterval ( () => {
             if (Files.get_file_webserial_ ()) {
               Files.watcher_calledCount = 0;
               clearInterval (Files.watcher);
             } else {
+              var _len = Files.received_string.length;
+              if (_len != Files.watcher_lastLen) {   // still streaming
+                Files.watcher_lastLen = _len;
+                Files.watcher_calledCount = 0;
+                files.update_file_status(`Getting ${Files.get_file_name}... ${_len} bytes`);
+                return;
+              }
               Files.watcher_calledCount += 1;
-              if (Files.watcher_calledCount >= 10) {
+              if (Files.watcher_calledCount >= 40) {   // 10 s of silence
                 UI ['notify'].send(MSG['ErrorGET']);
                 clearInterval (Files.watcher);
                 Files.watcher = undefined;
