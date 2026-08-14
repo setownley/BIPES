@@ -481,27 +481,43 @@ class files {
 
         files.update_file_status(`Sending raw (USB) ${this.put_file_name}...`);
 
-        let decoderUint8 =  new TextDecoder().decode(this.put_file_data).replaceAll(/(\r\n|\r|\n)/g, '\\r').replaceAll(/'/g, "\\'").replaceAll(/"/g, '\\"').replaceAll(/\t/g, '    ');
-        UI ['progress'].start(parseInt(decoderUint8.length/Channel ['webserial'].packetSize) + 1);
+        // Chunked, binary-safe upload (base64, 384 raw bytes per REPL line).
+        // Replaces the old single f.write('<whole file>') which (a) failed
+        // with a 0-byte file above ~27 KB (device-side error after open()
+        // already truncated the file) and (b) corrupted any file containing
+        // backslash sequences, because backslashes were never escaped.
+        var _cmds = ["import binascii\r"];
+
+        //Workaround for ESP32S2 using CircuitPython
+        //Needs to remount filesystem in write mode
+        if (UI ['workspace'].selector.value == "ESP32S2") {
+                _cmds.push ("import storage\r");
+                _cmds.push ("storage.remount(\"/\", False)\r");
+        }
+
+        _cmds.push (`f=open('${this.put_file_name}', 'wb')\r`);
+        for (var _off = 0; _off < this.put_file_data.length; _off += 384) {
+          var _chunk = this.put_file_data.subarray(_off, _off + 384);
+          var _bin = '';
+          for (var _i = 0; _i < _chunk.length; _i++)
+            _bin += String.fromCharCode(_chunk[_i]);
+          _cmds.push (`f.write(binascii.a2b_base64('${btoa(_bin)}'))\r`);
+        }
+        _cmds.push ("f.close()\r");
+
+        var _total = 0;
+        for (var _i = 0; _i < _cmds.length; _i++) _total += _cmds[_i].length;
+        UI ['progress'].start(parseInt(_total/Channel ['webserial'].packetSize) + 1);
 
         //ctrl-C twice: interrupt any running program
         mux.clearBuffer ();
         mux.bufferUnshift ('\r\x03\x03');
-
-        mux.bufferPush ("import struct\r");
-
-	//Workaround for ESP32S2 using CircuitPython
-	//Needs to remount filesystem in write mode
-	if (UI ['workspace'].selector.value == "ESP32S2") {
-		mux.bufferPush ("import storage\r");
-		mux.bufferPush ("storage.remount(\"/\", False)\r");
-	} 
-
-        mux.bufferPush (`f=open('${this.put_file_name}', 'w')\r`);
-
-        mux.bufferPush (`f.write('${decoderUint8}')\r`, () => {files.update_file_status(`Sent ${Files.put_file_data.length} bytes`)});
-
-        mux.bufferPush ("f.close()\r");
+        for (var _i = 0; _i < _cmds.length; _i++) {
+          if (_i == _cmds.length - 1)
+            mux.bufferPush (_cmds[_i], () => {files.update_file_status(`Sent ${Files.put_file_data.length} bytes`)});
+          else
+            mux.bufferPush (_cmds[_i]);
+        }
         mux.bufferPush ('\r\r\r');
         files.update_file_status(`File ${this.put_file_name} sent.`);
       break;
