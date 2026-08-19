@@ -1,17 +1,55 @@
-# DEPLOYMENT.md — BIPES fork: local dev → Railway, one identical artifact
+# DEPLOYMENT.md — BIPES fork: local dev → production
 
-The migration guarantee: the container you run locally with `./dev.sh docker`
-is byte-identical to what Railway builds and runs. Nothing changes at
-migration time except who runs it.
+## Current live deployment (verified 2026-08-19)
+
+**The live site is `https://bipes.synthella.ai/`, served by Cloudflare — not by
+Railway and not by the nginx config in `deploy/`.**
+
+Verified by response headers on `https://bipes.synthella.ai/ui/`:
+
+```
+Server: cloudflare
+Cache-Control: public, max-age=0, must-revalidate
+CF-Cache-Status: HIT
+```
+
+The config that governs it is `wrangler.jsonc` (`"assets": {"directory": "./"}`)
+plus `_headers` at the repo root. Deploys are Cloudflare's, not `git push` to
+Railway.
+
+Consequences, learned the hard way:
+
+- **`deploy/default.conf.template` is not in effect.** Its
+  `add_header Cache-Control "no-cache"` — described in the table below as
+  verified — has never applied to the live site. Cache behaviour comes from
+  Cloudflare's defaults and from `_headers`.
+- **`./dev.sh` does not exist in this repo.** Every command below that invokes
+  it is aspirational. For local work use `python -m http.server 8000` from the
+  repo root and open `http://localhost:8000/ui/`; localhost is still a secure
+  context, so Web Serial works.
+- Sections 2–3 below still describe the Railway path. Keep them only if you
+  intend Railway as the documented spare host named in section 5, item 5;
+  they do not describe how the site is currently served.
+
+This drift caused a real classroom bug: `devinfo.json` and `toolbox/*.xml` are
+fetched by XHR and were the only assets requested without a `?ver=`
+cache-buster. Browsers cached them heuristically and never revalidated, so a
+fresh `index.html` paired with a stale `devinfo.json` and offered a board the
+JSON did not define — surfacing as "Invalid device." Fixed by the `?ver=`
+carried on those fetches (`DATA_VER` in `ui/core/ui.js`) plus `no-store` on
+both paths in `_headers`.
 
 ## Verification status of this document (read first)
+
+> **Stale as of 2026-08-19.** The rows below were verified against the Railway
+> path, which is not what serves the live site. Read the section above first.
 
 | Claim | How verified | Confidence |
 |---|---|---|
 | Plain BIPES clone serves the full IDE with no build step, no submodules | Cloned github.com/BIPES/BIPES (master), served it, curl-checked /ui/, Blockly bundles, block_definitions.js, generator_stubs.js, esp32.xml — all 200 | HIGH |
 | Entry point is `/ui/`; root `/` is a 2-second meta-refresh redirect to it | Read root index.html in the clone | HIGH |
 | Missing git submodules (blockly, freeboard, databoard) don't break the IDE | Compiled Blockly bundles are committed in ui/core/; freeboard only linked as optional dashboard page | HIGH |
-| nginx template renders and serves the real BIPES tree with no-cache + gzip | envsubst-rendered, `nginx -t` passed, ran nginx 1.24 against the clone: all 200, Cache-Control: no-cache, 252 KB js gzipped to 39 KB | HIGH |
+| nginx template renders and serves the real BIPES tree with no-cache + gzip | envsubst-rendered, `nginx -t` passed, ran nginx 1.24 against the clone: all 200, Cache-Control: no-cache, 252 KB js gzipped to 39 KB | HIGH **for nginx — but NOT IN USE**; the live site is Cloudflare and never sends this header |
 | Railway auto-builds a root Dockerfile and injects PORT at runtime | Railway docs (docs.railway.com/builds/dockerfiles, /public-networking), July 2026 | HIGH |
 | Dual-stack listen (v4 + [::]) is the right Railway bind | Railway docs say 0.0.0.0:$PORT; a Mar-2026 report shows Railway's proxy connecting via IPv6 and 502ing v4-only binds; dual-stack covers both and matches the nginx image's own default | MEDIUM — see "If Railway 502s" below |
 | The exact Docker image was built and run | NOT TESTED — no Docker daemon in my validation environment. Config validated by nginx -t + live serve outside Docker. First `./dev.sh docker` run on your PC is the remaining test | — |
@@ -71,7 +109,7 @@ Docker host has IPv6 disabled — that is a local-environment quirk (my
 validation sandbox had it). Fix the host (enable IPv6) rather than editing
 the template; the [::] line exists for Railway.
 
-## 3. Migration to Railway (30 minutes, do it a week early — not the night before)
+## 3. Migration to Railway (NOT THE LIVE PATH — see "Current live deployment" above)
 
 1. Push the repo to GitHub (private is fine — Railway reads via its GitHub app).
 2. Railway dashboard → New Project → Deploy from GitHub repo → select the fork.
@@ -110,12 +148,12 @@ one board before batch-running it on twenty.
 
 ## 5. Pre-class checklist (morning of)
 
-1. `https://<domain>/ui/` loads in Chrome on a student machine (not just yours).
+1. `https://bipes.synthella.ai/ui/` loads in Chrome on a student machine (not just yours).
 2. USB connect on that machine → REPL prompt appears.
 3. `import robot; robot.VERSION` over the REPL matches the version your
    blocks were tested against.
 4. One end-to-end run: drive-forward block + stop button → motors halt.
-5. Known dependency: if Railway is down during class you have no fallback —
+5. Known dependency: if Cloudflare is down during class you have no fallback —
    LAN-serving from your laptop won't give students Web Serial (insecure
    remote origin), and bipes.net.br lacks your custom blocks. If that risk
    is unacceptable, deploy the same repo to a second static host as a spare

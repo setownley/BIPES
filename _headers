@@ -1,0 +1,22 @@
+# Cloudflare Workers static-assets headers.
+#
+# This site is served by Cloudflare (wrangler.jsonc, "assets": {"directory": "./"}),
+# NOT by the nginx config in deploy/ — see DEPLOYMENT.md.
+#
+# Why this file exists: devinfo.json and the toolbox XML are fetched by
+# XMLHttpRequest from ui/core/ui.js, not by <script>/<link> tags. They were the
+# only assets requested without a `?ver=` cache-buster, so browsers were free to
+# apply heuristic freshness and keep serving an old copy from disk without ever
+# revalidating. index.html, being a navigation request, kept revalidating
+# normally — so a fresh index.html could pair with a months-old devinfo.json and
+# offer a board the JSON did not define, which surfaced as "Invalid device."
+#
+# no-store (not no-cache) because these files decide which pins the blocks offer.
+# A wrong pin list is a bricked board, not a cosmetic glitch, so it is worth
+# paying a small request on every load to never serve a stale one.
+
+/ui/devinfo/*
+  Cache-Control: no-store
+
+/ui/toolbox/*
+  Cache-Control: no-store

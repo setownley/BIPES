@@ -331,8 +331,22 @@ notify.prototype.log = function (message) {
 }
 
 /**
+ * Cache-busting version for the *data* assets (devinfo.json, toolbox/*.xml).
+ * The <script> tags in index.html already carry a `?ver=` each; these two were
+ * the only assets fetched without one, so browsers were free to serve them from
+ * disk indefinitely. That let a fresh index.html pair with a stale devinfo.json
+ * and offer a device the JSON did not define ("Invalid device.").
+ *
+ * `_headers` now sends `Cache-Control: no-store` for both paths, so this only
+ * has to defeat copies already cached under the old policy. Bump it anyway if
+ * you ever need to force a refetch for everyone.
+ */
+const DATA_VER = '0.2.4.0819';
+
+/**
  * Do a XML Http request, if in offline mode, will try to find the data inside the index.html file.
- * @param {string} filename - The name of the file
+ * @param {string} filename - The name of the file, may carry a `?ver=` query
+ *     string; it is stripped before deriving the offline asset name.
  * @param {string} responsetype - The types of responses, 'document', 'text' or '' (empty).
  * @param {function} onsuccess -Callback function when the the XMLHttpRequest succeed.
  * @param {function} [onfail] - Callback function when the the XMLHttpRequest fails.
@@ -358,7 +372,9 @@ async function xhrGET (filename, responsetype, onsuccess, onfail) {
       }
   xmlHTTP.send();
 	} else {
-      filename = filename.replace(/[\/\.]/g, '_')
+      /* drop any `?ver=` before building the OFFLINE_ name, otherwise the
+         cache-buster would be baked into the identifier and never resolve. */
+      filename = filename.split('?') [0].replace(/[\/\.]/g, '_')
 	    let regex_xml = /_(.*)_xml/;
 	    let regex_json = /_(.*)_json/;
       if (regex_json.test (filename)) {
@@ -485,7 +501,7 @@ class workspace {
     this.device_desc = getIn(this.content, '#device_desc');
     /** gets `devinfo/devinfo.json` data as an object.*/
     this.devices = [];
-    xhrGET("devinfo/devinfo.json", 'json', (response) => {
+    xhrGET(`devinfo/devinfo.json?ver=${DATA_VER}`, 'json', (response) => {
       this.devices = response.devices;
       if (!/#(.)/.test(window.location.href)) // checks if there is a file to be loaded
         this.change ();
@@ -595,11 +611,11 @@ workspace.prototype.change = function () {
     this.device_desc.innerHTML = selected.description;
 
     if (!!selected.toolbox) { // checks if toolbox is set
-       xhrGET(`toolbox/${selected.toolbox}`, 'document', (XML_) => {
+       xhrGET(`toolbox/${selected.toolbox}?ver=${DATA_VER}`, 'document', (XML_) => {
         Code.reloadToolbox(XML_);
       });
     } else {
-        xhrGET(`toolbox/${this.defaultToolbox}`, 'document', (XML_) => {
+        xhrGET(`toolbox/${this.defaultToolbox}?ver=${DATA_VER}`, 'document', (XML_) => {
           Code.reloadToolbox(XML_);
         });
         UI ['notify'].send(MSG['noToolbox']);
