@@ -698,7 +698,12 @@ workspace.prototype.readWorkspace = function (xml, prettyText) {
       }
     } catch(e) {UI ['notify'].log(e)}
   } else {
-    this.changeTo (Object.keys(this.devices) [0]);
+    /* No DEVICE field in the XML: fall back to the default board declared
+       by the first <option> of #device_selector, so index.html is the only
+       place the default is defined. Was Object.keys(this.devices)[0], which
+       silently tracked whichever device happened to be first in devinfo.json
+       and disagreed with the selector's own default. */
+    this.changeTo (this.selector.options [0].value);
   }
   return xml;
 }

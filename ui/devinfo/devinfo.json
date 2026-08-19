@@ -1,5 +1,29 @@
 {
 	"devices": {
+		"ESP32C3": {
+			"title":"<b>ESP32-C3</b><br>",
+			"speed":"115200",
+			"boardID":"ESP32-C3",
+			"img":"",
+			"description":"ESP32-C3 with native USB-CDC. Usable GPIOs are 0-10 and 20-21 only. GPIO11-17 are the SPI flash and are not offered here - driving them bricks the board. GPIO18/19 are the USB data lines. GPIO5 (SDA) and GPIO6 (SCL) carry the I2C bus shared by the OLED, gyro and ToF sensor.",
+			"toolbox":"esp32.xml",
+			"pinout": [
+				["GPIO0 / ADC1_0", "0"],
+				["GPIO1 / ADC1_1", "1"],
+				["GPIO2 / ADC1_2 / strapping", "2"],
+				["GPIO3 / ADC1_3", "3"],
+				["GPIO4 / ADC1_4", "4"],
+				["GPIO5 / SDA", "5"],
+				["GPIO6 / SCL", "6"],
+				["GPIO7 / SS", "7"],
+				["GPIO8 / strapping", "8"],
+				["GPIO9 / BOOT / strapping", "9"],
+				["GPIO10", "10"],
+				["GPIO20 / RX", "20"],
+				["GPIO21 / TX", "21"]
+			],
+			"serial_packet_size":"500"
+		},
 		"AmadoBoard": {
 			"title":"<b>AmadoBoard</b><br>",
 			"speed":"115200",
