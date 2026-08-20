@@ -6479,11 +6479,10 @@ Blockly.Python['robot_nudge'] = function(block) {
 
 /* ---- Machine: Robot OS background timer ---- */
 Blockly.Python['robot_os_timer'] = function(block) {
-  Blockly.Python.definitions_['import_robot'] = 'import robot';
-  // Statement, so it always lands after the imports Blockly hoists to the top.
-  // Save-to-robot additionally sets the builtins flag before `import robot`, so
-  // a saved program never creates Timer 0; this call is what makes the block
-  // effective when Run from the IDE against an already-imported robot module.
-  var on = block.getFieldValue('ENABLED') === 'TRUE' ? 'True' : 'False';
-  return 'robot.os_timer(' + on + ')\n';
+  // Configuration block, not a runtime call. The Run / Save-to-robot pipeline
+  // reads the workspace and writes robot_settings.txt; robot.apply_settings()
+  // is what acts on it. Emitting a comment keeps the generated program honest
+  // about the setting without the student's code touching Timer 0.
+  var on = block.getFieldValue('ENABLED') === 'TRUE' ? '1' : '0';
+  return '# Robot OS background timer: OS_TIMER=' + on + '\n';
 };

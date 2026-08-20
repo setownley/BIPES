@@ -236,7 +236,10 @@ class websocket {
               // final response for put
               if (Tool.decode_resp(data) == 0) {
                 files.update_file_status('Sent ' + Files.put_file_name + ', ' + Files.put_file_data.length + ' bytes');
-                Files.listFiles();
+                if (Files.put_file_queue && Files.put_file_queue.length)
+                  setTimeout (() => {Files.put_file_next()}, 0);  // multi-file save
+                else
+                  Files.listFiles();
               } else {
                 files.update_file_status('Failed sending ' + Files.put_file_name);
               }

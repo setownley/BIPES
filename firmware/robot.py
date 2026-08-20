@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "0.5.7"  # must match the block set deployed in the BIPES fork
+VERSION = "0.5.8"  # must match the block set deployed in the BIPES fork
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -253,16 +253,58 @@ def _tick_cb(t):
 # program with the background system off, so electronics lessons can drive the
 # ultrasonic, QRE and OLED directly without Timer 0 fighting them.
 #
-# The flag has to be readable BEFORE this module initialises Timer 0, so it
-# travels on `builtins`, which Save-to-robot sets ahead of `import robot`.
-# Absent flag => True => behaviour is exactly as it was.
-import builtins
-OS_TIMER = getattr(builtins, "_BIPES_OS_TIMER", True)
+# The setting lives in a file on flash, written by BIPES before every Run and
+# every Save-to-robot, so the IDE and standalone boot share one mechanism.
+# Missing, unreadable or malformed file => True => behaviour is exactly as it
+# was before this feature existed.
+SETTINGS_FILE = "robot_settings.txt"
 
 _tim = None                 # Timer IDs 0-1 only on the C3; 1 is kept free
-if OS_TIMER:
-    _tim = Timer(0)
-    _tim.init(period=TICK_MS, mode=Timer.PERIODIC, callback=_tick_cb)
+OS_TIMER = True             # reflects the setting currently applied
+
+def _read_os_timer_setting():
+    """OS_TIMER from SETTINGS_FILE. Only a literal 0 turns the timer off; any
+    other value, a missing key, an unreadable file or junk means True."""
+    try:
+        f = open(SETTINGS_FILE)
+    except OSError:
+        return True
+    try:
+        for line in f:
+            line = line.strip()
+            if line.startswith("OS_TIMER="):
+                return line[9:].strip() != "0"
+    except OSError:
+        return True
+    finally:
+        f.close()
+    return True
+
+def _timer_start():
+    global _tim
+    if _tim is None:
+        _tim = Timer(0)
+        _tim.init(period=TICK_MS, mode=Timer.PERIODIC, callback=_tick_cb)
+
+def _timer_stop():
+    global _tim
+    if _tim is not None:
+        _tim.deinit()
+        _tim = None
+
+def apply_settings():
+    """Read SETTINGS_FILE and make Timer 0 match it. Idempotent: safe to call
+    when the timer is already in the wanted state, which is what makes it work
+    for IDE runs where this module is already in sys.modules and ticking."""
+    global OS_TIMER
+    OS_TIMER = _read_os_timer_setting()
+    if OS_TIMER:
+        _timer_start()
+    else:
+        _timer_stop()
+    return OS_TIMER
+
+apply_settings()            # first import honours the file; none => timer on
 
 # ---------------------------------------------------------------------------
 # Motor internals
@@ -720,23 +762,19 @@ def save_trim():
     print("saved trim:", _trim["A"], _trim["B"])
 
 def os_timer(on):
-    """Start or stop the background Timer 0 at runtime.
-
-    Save-to-robot sets the builtins flag before `import robot`, so a saved
-    program never creates Timer 0 at all. This is the same switch for code Run
-    straight from the IDE, where robot.py may already be imported and ticking."""
-    global _tim
-    if on and _tim is None:
-        _tim = Timer(0)
-        _tim.init(period=TICK_MS, mode=Timer.PERIODIC, callback=_tick_cb)
-    elif not on and _tim is not None:
-        _tim.deinit()
-        _tim = None
+    """Direct runtime switch, kept for REPL use and tests. Deliberately does
+    NOT touch SETTINGS_FILE: apply_settings() + robot_settings.txt is the
+    persistent configuration mechanism, this is only a live override."""
+    global OS_TIMER
+    OS_TIMER = bool(on)
+    if OS_TIMER:
+        _timer_start()
+    else:
+        _timer_stop()
 
 def shutdown():
     """Full teardown, matching the handover's verified order."""
     stop()
-    if _tim is not None:            # never created when OS_TIMER is False
-        _tim.deinit()
+    _timer_stop()                   # no-op when OS_TIMER is False
     _oled.fill(0)
     _oled.show()

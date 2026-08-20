@@ -138,7 +138,12 @@ class Tool {
 
     //   return;
     // }
-    let code = code_ == undefined ? Blockly.Python.workspaceToCode(Code.workspace) : code_;
+    // Running the workspace: refresh robot_settings.txt on flash and apply it
+    // before the student's program. Explicit code_ (install/copy helpers) is
+    // sent untouched.
+    let code = code_ == undefined
+      ? Files.robot_settings_prelude () + Blockly.Python.workspaceToCode(Code.workspace)
+      : code_;
 
     if (code) {
       code+='\r\r';//Snek workaround
@@ -416,6 +421,7 @@ class files {
     this.get_file_name = null;
     this.get_file_data = null;
     this.binary_state = 0;
+    this.put_file_queue = [];
     this.received_string = "";
     this.viewOnly = false;
     /**Object that contains a ``codemirror`` editor*/
@@ -446,6 +452,94 @@ class files {
       this.editor.setSize(window.innerWidth - (18*$em),window.innerHeight - (6*$em))
     else
       this.editor.setSize((window.innerWidth/2) - (18*$em),window.innerHeight - (6*$em))
+  }
+  /**
+   * Commands that must lead any raw-REPL upload, once per stream.
+   * @return {Array<string>}
+   */
+  put_file_preamble () {
+    let cmds = ["import binascii\r"];
+    //Workaround for ESP32S2 using CircuitPython
+    //Needs to remount filesystem in write mode
+    if (UI ['workspace'].selector.value == "ESP32S2") {
+      cmds.push ("import storage\r");
+      cmds.push ("storage.remount(\"/\", False)\r");
+    }
+    return cmds;
+  }
+  /**
+   * Chunked, binary-safe REPL commands that write ONE file. Factored out of
+   * put_file() so put_files() can write several through the identical path.
+   * @return {Array<string>}
+   */
+  put_file_cmds (name, data) {
+    let cmds = [`f=open('${name}', 'wb')\r`];
+    for (var _off = 0; _off < data.length; _off += 384) {
+      var _chunk = data.subarray(_off, _off + 384);
+      var _bin = '';
+      for (var _i = 0; _i < _chunk.length; _i++)
+        _bin += String.fromCharCode(_chunk[_i]);
+      cmds.push (`f.write(binascii.a2b_base64('${btoa(_bin)}'))\r`);
+    }
+    cmds.push ("f.close()\r");
+    return cmds;
+  }
+  /**
+   * Upload several files in ONE ordered command stream.
+   * put_file() opens with mux.clearBuffer(), so two back-to-back calls would
+   * discard the first file's still-queued commands. Everything a multi-file
+   * save needs goes through here instead.
+   * @param {Array<{name: string, data: Uint8Array}>} items
+   */
+  put_files (items) {
+    switch (Channel ['mux'].currentChannel) {
+      case 'webserial':
+      case 'webbluetooth': {
+        let cmds = this.put_file_preamble ();
+        items.forEach ((it) => { cmds = cmds.concat (this.put_file_cmds (it.name, it.data)); });
+        let names = items.map ((it) => it.name).join (', ');
+        let total = 0;
+        for (let i = 0; i < cmds.length; i++) total += cmds [i].length;
+        UI ['progress'].start (parseInt (total / Channel ['webserial'].packetSize) + 1);
+        //ctrl-C twice: interrupt any running program
+        mux.clearBuffer ();
+        mux.bufferUnshift ('\r\x03\x03');
+        for (let i = 0; i < cmds.length; i++) {
+          if (i == cmds.length - 1)
+            mux.bufferPush (cmds [i], () => {files.update_file_status (`Sent ${names}`)});
+          else
+            mux.bufferPush (cmds [i]);
+        }
+        mux.bufferPush ('\r\r\r');
+        files.update_file_status (`Files ${names} sent.`);
+        break;
+      }
+      default:
+        // WebREPL's binary put protocol cannot be batched into one stream, so
+        // queue and send the next when the state machine reports the previous
+        // one finished (see channel.js, binary_state 12).
+        this.put_file_queue = items.slice (1);
+        this.put_file_name = items [0].name;
+        this.put_file_data = items [0].data;
+        this.put_file ();
+    }
+  }
+  /**
+   * Send the next queued file, if any. WebREPL path only; called by the
+   * put-complete branch of the binary state machine.
+   */
+  put_file_next () {
+    if (!this.put_file_queue || this.put_file_queue.length === 0) return;
+    let it = this.put_file_queue.shift ();
+    this.put_file_name = it.name;
+    this.put_file_data = it.data;
+    this.put_file ();
+  }
+  /** String to the byte array the upload path expects. */
+  str_bytes (text) {
+    let buf = new Uint8Array (text.length);
+    for (let i = 0; i < text.length; i++) buf [i] = text.charCodeAt (i);
+    return buf;
   }
   /**
    * Upload file to device.
@@ -486,24 +580,8 @@ class files {
         // with a 0-byte file above ~27 KB (device-side error after open()
         // already truncated the file) and (b) corrupted any file containing
         // backslash sequences, because backslashes were never escaped.
-        var _cmds = ["import binascii\r"];
-
-        //Workaround for ESP32S2 using CircuitPython
-        //Needs to remount filesystem in write mode
-        if (UI ['workspace'].selector.value == "ESP32S2") {
-                _cmds.push ("import storage\r");
-                _cmds.push ("storage.remount(\"/\", False)\r");
-        }
-
-        _cmds.push (`f=open('${this.put_file_name}', 'wb')\r`);
-        for (var _off = 0; _off < this.put_file_data.length; _off += 384) {
-          var _chunk = this.put_file_data.subarray(_off, _off + 384);
-          var _bin = '';
-          for (var _i = 0; _i < _chunk.length; _i++)
-            _bin += String.fromCharCode(_chunk[_i]);
-          _cmds.push (`f.write(binascii.a2b_base64('${btoa(_bin)}'))\r`);
-        }
-        _cmds.push ("f.close()\r");
+        var _cmds = this.put_file_preamble ()
+                    .concat (this.put_file_cmds (this.put_file_name, this.put_file_data));
 
         var _total = 0;
         for (var _i = 0; _i < _cmds.length; _i++) _total += _cmds[_i].length;
@@ -569,6 +647,28 @@ class files {
     return blocks.length === 0 ? true : blocks [0].getFieldValue ('ENABLED') === 'TRUE';
   }
   /**
+   * Contents of robot_settings.txt for the current workspace. robot.py is the
+   * only code that interprets this; BIPES just keeps the file in step.
+   * @return {string}
+   */
+  robot_settings_text () {
+    return 'OS_TIMER=' + (this.os_timer_enabled () ? '1' : '0') + '\n';
+  }
+  /**
+   * Python prepended to an IDE run: refresh robot_settings.txt on flash, then
+   * apply it. apply_settings() rather than a re-import, because MicroPython
+   * caches modules - `import robot` is a no-op once robot is in sys.modules,
+   * so only an explicit call can change a Timer 0 that is already running.
+   * @return {string}
+   */
+  robot_settings_prelude () {
+    return "f = open('robot_settings.txt', 'w')\n"
+         + "f.write('" + this.robot_settings_text ().replace ('\n', '\\n') + "')\n"
+         + "f.close()\n"
+         + "import robot\n"
+         + "robot.apply_settings()\n";
+  }
+  /**
    * One-click: generate Python from the block workspace and save it to the
    * board as main.py (runs automatically on every power-up / RESET).
    */
@@ -577,21 +677,17 @@ class files {
       UI ['notify'].send ('Connect to the robot first, then try again.');
       return;
     }
-	// The Machine > "Robot OS background timer" block, when unticked, has to be
-	// known BEFORE `import robot` runs - by the time the module body executes it
-	// has already created Timer 0. Setting the flag on builtins here is the only
-	// point in the pipeline guaranteed to precede every generated import.
-	let prelude = 'import robot\nrobot.cal_gate()\n';
-	if (!this.os_timer_enabled ())
-	  prelude = 'import builtins\nbuiltins._BIPES_OS_TIMER = False\n' + prelude;
-	let codeStr = prelude + Blockly.Python.workspaceToCode (Code.workspace);
-    var bufCode = new Uint8Array (codeStr.length);
-    for (var i = 0, strLen = codeStr.length; i < strLen; i++) {
-      bufCode [i] = codeStr.charCodeAt (i);
-    }
-    this.put_file_name = 'main.py';
-    this.put_file_data = bufCode;
-    this.put_file ();
+    // robot_settings.txt is rewritten on every save, even when no block is in
+    // the workspace, so an OS_TIMER=0 left by an earlier project cannot linger
+    // as a stale setting. Both files go up in one ordered stream: the settings
+    // file has to be on flash before main.py calls apply_settings() at the next
+    // power-up.
+    let codeStr = 'import robot\nrobot.apply_settings()\nrobot.cal_gate()\n'
+                + Blockly.Python.workspaceToCode (Code.workspace);
+    this.put_files ([
+      {name: 'robot_settings.txt', data: this.str_bytes (this.robot_settings_text ())},
+      {name: 'main.py',            data: this.str_bytes (codeStr)}
+    ]);
   }
   files_save_as () {
 
