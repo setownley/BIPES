@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "0.5.6"  # must match the block set deployed in the BIPES fork
+VERSION = "0.5.7"  # must match the block set deployed in the BIPES fork
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -248,8 +248,21 @@ def _tick_cb(t):
     if _tick % OLED_EVERY_N_TICKS == 0:
         _repaint()
 
-_tim = Timer(0)             # Timer IDs 0-1 only on the C3; 1 is kept free
-_tim.init(period=TICK_MS, mode=Timer.PERIODIC, callback=_tick_cb)
+# Background system on/off ---------------------------------------------------
+# BIPES' "Robot OS background timer" block (Machine category) can start a
+# program with the background system off, so electronics lessons can drive the
+# ultrasonic, QRE and OLED directly without Timer 0 fighting them.
+#
+# The flag has to be readable BEFORE this module initialises Timer 0, so it
+# travels on `builtins`, which Save-to-robot sets ahead of `import robot`.
+# Absent flag => True => behaviour is exactly as it was.
+import builtins
+OS_TIMER = getattr(builtins, "_BIPES_OS_TIMER", True)
+
+_tim = None                 # Timer IDs 0-1 only on the C3; 1 is kept free
+if OS_TIMER:
+    _tim = Timer(0)
+    _tim.init(period=TICK_MS, mode=Timer.PERIODIC, callback=_tick_cb)
 
 # ---------------------------------------------------------------------------
 # Motor internals
@@ -706,9 +719,24 @@ def save_trim():
         f.write(str(_trim["A"]) + "," + str(_trim["B"]))
     print("saved trim:", _trim["A"], _trim["B"])
 
+def os_timer(on):
+    """Start or stop the background Timer 0 at runtime.
+
+    Save-to-robot sets the builtins flag before `import robot`, so a saved
+    program never creates Timer 0 at all. This is the same switch for code Run
+    straight from the IDE, where robot.py may already be imported and ticking."""
+    global _tim
+    if on and _tim is None:
+        _tim = Timer(0)
+        _tim.init(period=TICK_MS, mode=Timer.PERIODIC, callback=_tick_cb)
+    elif not on and _tim is not None:
+        _tim.deinit()
+        _tim = None
+
 def shutdown():
     """Full teardown, matching the handover's verified order."""
     stop()
-    _tim.deinit()
+    if _tim is not None:            # never created when OS_TIMER is False
+        _tim.deinit()
     _oled.fill(0)
     _oled.show()

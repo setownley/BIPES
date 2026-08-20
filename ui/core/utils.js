@@ -560,6 +560,15 @@ class files {
    * Get file from ``codemirror``editor and calls :js:func:`Files.put_file` to upload.
    */
   /**
+   * Read the Machine > "Robot OS background timer" block, if the student placed
+   * one. No block, or a ticked one, means normal Robot OS behaviour.
+   * @return {boolean} whether robot.py should start its background Timer 0.
+   */
+  os_timer_enabled () {
+    let blocks = Code.workspace.getBlocksByType ('robot_os_timer', false);
+    return blocks.length === 0 ? true : blocks [0].getFieldValue ('ENABLED') === 'TRUE';
+  }
+  /**
    * One-click: generate Python from the block workspace and save it to the
    * board as main.py (runs automatically on every power-up / RESET).
    */
@@ -568,7 +577,14 @@ class files {
       UI ['notify'].send ('Connect to the robot first, then try again.');
       return;
     }
-	let codeStr = 'import robot\nrobot.cal_gate()\n' + Blockly.Python.workspaceToCode (Code.workspace);
+	// The Machine > "Robot OS background timer" block, when unticked, has to be
+	// known BEFORE `import robot` runs - by the time the module body executes it
+	// has already created Timer 0. Setting the flag on builtins here is the only
+	// point in the pipeline guaranteed to precede every generated import.
+	let prelude = 'import robot\nrobot.cal_gate()\n';
+	if (!this.os_timer_enabled ())
+	  prelude = 'import builtins\nbuiltins._BIPES_OS_TIMER = False\n' + prelude;
+	let codeStr = prelude + Blockly.Python.workspaceToCode (Code.workspace);
     var bufCode = new Uint8Array (codeStr.length);
     for (var i = 0, strLen = codeStr.length; i < strLen; i++) {
       bufCode [i] = codeStr.charCodeAt (i);

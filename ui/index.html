@@ -61,7 +61,7 @@ function checkCookie() {
   <script src="core/python_compressed.js?ver=0.2.3.9292231"></script>
   <script src="core/code.js?ver=0.2.3.1125"></script>
   <script src="core/channel.js?ver=0.2.3.1125"></script>
-  <script src="core/utils.js?ver=0.2.3.1125"></script>
+  <script src="core/utils.js?ver=0.2.4.0820"></script>
   <script src="core/ui.js?ver=0.2.4.0819"></script>
   <script src="core/queue.js"></script>
   <script src="core/FileSaver.js"></script>
@@ -69,8 +69,8 @@ function checkCookie() {
 
 
   <!-- Custom Blocks for BIPES Project --> 
-  <script src="core/block_definitions.js?ver=0.2.3.11011813"></script> <!-- Rafael 24/03/2020 -->
-  <script src="core/generator_stubs.js?ver=0.2.3.11011813"></script> <!-- Rafael 24/03/2020 -->
+  <script src="core/block_definitions.js?ver=0.2.4.0820"></script> <!-- Rafael 24/03/2020 -->
+  <script src="core/generator_stubs.js?ver=0.2.4.0820"></script> <!-- Rafael 24/03/2020 -->
 
   <!-- xterm part -->
   <script src="core/xterm.js?ver=4.13.0"></script>
@@ -1185,6 +1185,7 @@ function eraseCookieModal(name) {
 
   <category name="%{BKY_CAT_MACHINE}">
       <label text="%{BKY_CAT_MACHINE}"></label>
+    <block type="robot_os_timer"></block>
       <category name="CPU">
       <label text="ESP32 CPU"></label>
 

@@ -12064,3 +12064,15 @@ Blockly.Blocks['robot_nudge'] = {
 };
 
 
+/* ---- Machine: Robot OS background timer ---- */
+Blockly.Blocks['robot_os_timer'] = {
+  init: function() {
+    this.appendDummyInput()
+        .appendField("Robot OS background timer")
+        .appendField(new Blockly.FieldCheckbox("TRUE"), "ENABLED");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour(230);
+    this.setTooltip("Ticked (default): the Robot OS keeps reading the ultrasonic, line and side sensors and repainting the OLED. Unticked: Timer 0 never starts, so ordinary Machine blocks can drive that hardware directly.");
+  }
+};

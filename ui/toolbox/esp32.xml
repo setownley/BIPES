@@ -462,6 +462,7 @@
 
   <category name="%{BKY_CAT_MACHINE}">
       <label text="%{BKY_CAT_MACHINE}"></label>
+    <block type="robot_os_timer"></block>
       <category name="CPU">
       <label text="ESP32 CPU"></label>
 

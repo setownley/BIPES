@@ -6475,3 +6475,15 @@ Blockly.Python['robot_nudge'] = function(block) {
   var deg = Blockly.Python.valueToCode(block, 'DEG', Blockly.Python.ORDER_NONE) || '0';
   return "robot.nudge('" + block.getFieldValue('DIR') + "', " + deg + ")\n";
 };
+
+
+/* ---- Machine: Robot OS background timer ---- */
+Blockly.Python['robot_os_timer'] = function(block) {
+  Blockly.Python.definitions_['import_robot'] = 'import robot';
+  // Statement, so it always lands after the imports Blockly hoists to the top.
+  // Save-to-robot additionally sets the builtins flag before `import robot`, so
+  // a saved program never creates Timer 0; this call is what makes the block
+  // effective when Run from the IDE against an already-imported robot module.
+  var on = block.getFieldValue('ENABLED') === 'TRUE' ? 'True' : 'False';
+  return 'robot.os_timer(' + on + ')\n';
+};
