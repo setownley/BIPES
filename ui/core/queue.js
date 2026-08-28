@@ -140,6 +140,7 @@ window.addEventListener('load', function () {
         init: function() {
             this.setColour(190);
             this.appendDummyInput().appendField('Start VL53L0X ToF sensor');
+            this.appendDummyInput().appendField(new Blockly.FieldImage("media/vl53l0x.jpg", 55, 55, "*"));
             this.appendDummyInput()
                 .appendField('I2C').appendField(new Blockly.FieldDropdown([['0', '0'], ['1', '1']]), 'I2C')
                 .appendField('SDA').appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SDA')
