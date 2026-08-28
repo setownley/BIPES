@@ -17,7 +17,7 @@
 				["GPIO6", "6"],
 				["GPIO7", "7"],
 				["GPIO8 / On-board LED", "8"],
-				["GPIO9 / BOOT Btn", "9"],
+				["GPIO9 / BOOT Button", "9"],
 				["GPIO10", "10"],
 				["GPIO20 / RX", "20"],
 				["GPIO21 / TX", "21"]
@@ -262,7 +262,7 @@
 			"speed":"115200",
 			"boardID":"ESP module with ESP8266", 
 			"img":"devinfo/media/Wemos-D1-Mini.png",
-			"description":"<BR><BR><input type='button' onclick='loadDoc();' value='Open Documentation' /> <BR><BR>To use ESP8266, simply connecto to MicroPython board using Wifi. Micropython must be previously installed. Figure source: https://devonhubner.org/Using_MicroPython_with_a_WeMos_D1_Mini/",
+			"description":"<BR><BR><input type='button' onclick='loadDoc();' value='Open Documentation' /> <BR><BR>To use ESP8266, simply connecto to MicroPython board using Wifi. Micropython must be previously installed. Figure source and more details: https://docs.wemos.cc/en/latest/d1/d1_mini.html",
 			"toolbox":"esp8266.xml",
 			"pinout": [
 				["D0 / GPIO16", "16"],
@@ -394,7 +394,7 @@
 			"img":"devinfo/media/cape-headers.png",
 			"description":"",
 			"toolbox":"bbblack.xml",
-			"serial_packet_size":"100"
+			"serial_packet_size":"10"
 		},
 		"BBC": {
 			"title":"<b>BBC MicroBit</b><br>",
@@ -471,4 +471,3 @@
 		}
 	}
 }
-
