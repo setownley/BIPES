@@ -105,9 +105,30 @@ window.addEventListener('load', function () {
     }
 
     /*
+     * Simplify the GPIO2 pin label for students. Keep the same underlying
+     * pin value; only remove the word "strapping" from the displayed label.
+     */
+    if (Blockly.Blocks['pinout']) {
+        var classroomOriginalPinoutInit = Blockly.Blocks['pinout'].init;
+        Blockly.Blocks['pinout'].init = function() {
+            classroomOriginalPinoutInit.call(this);
+            var pinField = this.getField && this.getField('PIN');
+            if (pinField && Array.isArray(pinField.menuGenerator_)) {
+                pinField.menuGenerator_ = pinField.menuGenerator_.map(function(option) {
+                    var label = option[0];
+                    if (typeof label === 'string' && /GPIO2\b/.test(label)) {
+                        label = label.replace(/\s*\/\s*strapping\b/ig, '');
+                    }
+                    return [label, option[1]];
+                });
+            }
+        };
+    }
+
+    /*
      * OLED init: keep the original OLED artwork and controls, and add the
-     * visible I2C address. Classroom defaults are I2C 0, SDA 5, SCL 6,
-     * address 0x3C.
+     * visible I2C address. All classroom fields deliberately start at 0 so
+     * students must identify and enter the correct settings themselves.
      */
     Blockly.Blocks['init_oled'] = {
         init: function() {
@@ -127,24 +148,24 @@ window.addEventListener('load', function () {
                 .appendField('I2C')
                 .appendField(new Blockly.FieldDropdown([['0', '0'], ['1', '1']]), 'I2C')
                 .appendField('SDA')
-                .appendField(new Blockly.FieldNumber(5, 0, 48, 1), 'SDA')
+                .appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SDA')
                 .appendField('SCL')
-                .appendField(new Blockly.FieldNumber(6, 0, 48, 1), 'SCL');
+                .appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SCL');
             this.appendDummyInput()
                 .appendField('Address')
-                .appendField(new Blockly.FieldTextInput('0x3C'), 'ADDRESS');
+                .appendField(new Blockly.FieldTextInput('0'), 'ADDRESS');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Initialise an SSD1306 OLED on an I2C bus. Default address is 0x3C.');
+            this.setTooltip('Initialise an SSD1306 OLED on an I2C bus. Students must set the bus, SDA, SCL and address.');
             this.setHelpUrl('http://www.bipes.net.br');
         }
     };
 
     Blockly.Python['init_oled'] = function(block) {
         var i2c = block.getFieldValue('I2C') || '0';
-        var sda = block.getFieldValue('SDA') || '5';
-        var scl = block.getFieldValue('SCL') || '6';
-        var address = block.getFieldValue('ADDRESS') || '0x3C';
+        var sda = block.getFieldValue('SDA') || '0';
+        var scl = block.getFieldValue('SCL') || '0';
+        var address = block.getFieldValue('ADDRESS') || '0';
 
         Blockly.Python.definitions_['import_i2c'] = 'from machine import Pin, I2C';
         Blockly.Python.definitions_['import_ssd'] = 'import ssd1306';
@@ -158,9 +179,8 @@ window.addEventListener('load', function () {
 
     /*
      * VL53L0X Time-of-Flight sensor.
-     * The address field means the CURRENT address the sensor answers on.
-     * 0x29 is the normal power-up address. Different addresses can therefore
-     * be selected when a project has configured more than one sensor.
+     * All classroom fields deliberately start at 0 so students must identify
+     * and enter the correct I2C settings and sensor address themselves.
      */
     Blockly.Blocks['vl53l0x_init'] = {
         init: function() {
@@ -171,15 +191,15 @@ window.addEventListener('load', function () {
                 .appendField('I2C')
                 .appendField(new Blockly.FieldDropdown([['0', '0'], ['1', '1']]), 'I2C')
                 .appendField('SDA')
-                .appendField(new Blockly.FieldNumber(5, 0, 48, 1), 'SDA')
+                .appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SDA')
                 .appendField('SCL')
-                .appendField(new Blockly.FieldNumber(6, 0, 48, 1), 'SCL');
+                .appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SCL');
             this.appendDummyInput()
                 .appendField('Address')
-                .appendField(new Blockly.FieldTextInput('0x29'), 'ADDRESS');
+                .appendField(new Blockly.FieldTextInput('0'), 'ADDRESS');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Initialise a VL53L0X distance sensor. Standard address is 0x29.');
+            this.setTooltip('Initialise a VL53L0X distance sensor. Students must set the bus, SDA, SCL and address.');
         }
     };
 
@@ -189,23 +209,23 @@ window.addEventListener('load', function () {
             this.appendDummyInput()
                 .appendField('VL53L0X distance (mm)')
                 .appendField('address')
-                .appendField(new Blockly.FieldTextInput('0x29'), 'ADDRESS');
+                .appendField(new Blockly.FieldTextInput('0'), 'ADDRESS');
             this.setOutput(true, null);
-            this.setTooltip('Read distance in millimetres. Returns ???? when the sensor reports out of range.');
+            this.setTooltip('Read distance in millimetres. Set the sensor address first. Returns ???? when the sensor reports out of range.');
         }
     };
 
     function vl53AddressKey(address) {
-        return String(address || '0x29')
+        return String(address || '0')
             .replace(/^0x/i, '')
             .replace(/[^A-Za-z0-9_]/g, '_');
     }
 
     Blockly.Python['vl53l0x_init'] = function(block) {
         var i2c = block.getFieldValue('I2C') || '0';
-        var sda = block.getFieldValue('SDA') || '5';
-        var scl = block.getFieldValue('SCL') || '6';
-        var address = block.getFieldValue('ADDRESS') || '0x29';
+        var sda = block.getFieldValue('SDA') || '0';
+        var scl = block.getFieldValue('SCL') || '0';
+        var address = block.getFieldValue('ADDRESS') || '0';
         var key = vl53AddressKey(address);
         var busKey = i2c + '_' + sda + '_' + scl;
 
@@ -218,7 +238,7 @@ window.addEventListener('load', function () {
     };
 
     Blockly.Python['vl53l0x_distance'] = function(block) {
-        var address = block.getFieldValue('ADDRESS') || '0x29';
+        var address = block.getFieldValue('ADDRESS') || '0';
         var key = vl53AddressKey(address);
         var reading = 'tof_' + key + '.range';
         return ['(lambda _d: "????" if _d >= 8190 else _d)(' + reading + ')', Blockly.Python.ORDER_FUNCTION_CALL];
