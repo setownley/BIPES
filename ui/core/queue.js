@@ -105,14 +105,24 @@ window.addEventListener('load', function () {
     }
 
     /*
-     * OLED init: expose the I2C bus and address instead of hiding the address.
-     * Classroom defaults are I2C 0, SDA 5, SCL 6, address 0x3C.
+     * OLED init: keep the original OLED artwork and controls, and add the
+     * visible I2C address. Classroom defaults are I2C 0, SDA 5, SCL 6,
+     * address 0x3C.
      */
     Blockly.Blocks['init_oled'] = {
         init: function() {
             this.setColour(135);
             this.appendDummyInput()
                 .appendField('Init I2C SSD1306 OLED Display');
+
+            // Preserve the original BIPES OLED picture.
+            this.appendDummyInput()
+                .appendField(new Blockly.FieldImage(
+                    "media/oled.png",
+                    55,
+                    55,
+                    "*"));
+
             this.appendDummyInput()
                 .appendField('I2C')
                 .appendField(new Blockly.FieldDropdown([['0', '0'], ['1', '1']]), 'I2C')
