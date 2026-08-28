@@ -34,7 +34,7 @@ Queue.prototype.isEmpty = function () {
 
 Queue.prototype.length = function() {
     var elements = JSON.parse(localStorage.getItem("queue" + this.qn));
-    return elements.length;
+    return elements.length == 0 ? 0 : elements.length;
 }
 
 /* Classroom toolbox additions. */
@@ -78,10 +78,7 @@ if (typeof xhrGET === 'function') {
 window.addEventListener('load', function () {
     if (typeof Blockly === 'undefined' || typeof Blockly.Python === 'undefined') return;
 
-    /*
-     * Student-friendly GPIO labels. The underlying GPIO values are unchanged;
-     * only the names shown in the dropdown are adjusted.
-     */
+    /* Student-friendly GPIO labels: GPIO number plus only useful board functions. */
     if (Blockly.Blocks['pinout']) {
         var classroomOriginalPinoutInit = Blockly.Blocks['pinout'].init;
         Blockly.Blocks['pinout'].init = function() {
@@ -89,25 +86,12 @@ window.addEventListener('load', function () {
             var pinField = this.getField && this.getField('PIN');
             if (pinField && Array.isArray(pinField.menuGenerator_)) {
                 pinField.menuGenerator_ = pinField.menuGenerator_.map(function(option) {
-                    var label = option[0];
                     var value = String(option[1]);
-                    if (typeof label === 'string') {
-                        if (value === '2') {
-                            label = label.replace(/\s*\/\s*strapping\b/ig, '');
-                        }
-                        if (value === '8' && label.indexOf('On-board LED') === -1) {
-                            label += ' / On-board LED';
-                        }
-                        if (value === '9' && label.indexOf('BOOT Btn') === -1) {
-                            label += ' / BOOT Btn';
-                        }
-                        if (value === '20' && !/\bRX\b/.test(label)) {
-                            label += ' / RX';
-                        }
-                        if (value === '21' && !/\bTX\b/.test(label)) {
-                            label += ' / TX';
-                        }
-                    }
+                    var label = 'GPIO' + value;
+                    if (value === '8') label += ' / On-board LED';
+                    if (value === '9') label += ' / BOOT Btn';
+                    if (value === '20') label += ' / RX';
+                    if (value === '21') label += ' / TX';
                     return [label, option[1]];
                 });
             }
