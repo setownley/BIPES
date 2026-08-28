@@ -50,12 +50,11 @@ Queue.prototype.length = function() {
 /*
  * Classroom OLED behaviour for the ESP32-C3 course.
  *
- * The stock BIPES OLED generators are inconsistent: write_oled() calls
- * oled.show(), while write_oled_int() only writes to the framebuffer.
- * For younger students, both blocks should simply mean "put this on the
- * screen".  These overrides run after generator_stubs.js has loaded.
+ * Each OLED write block cleans only the area it is about to use, then writes
+ * and shows the framebuffer. This lets separate blocks share one screen.
  *
- * Both text and values now do: clear -> write -> show.
+ * Number fields reserve 4 characters (32 pixels) so changing values do not
+ * leave old digits behind. Text clears only the width of the text it writes.
  */
 window.addEventListener('load', function () {
     if (typeof Blockly === 'undefined' || typeof Blockly.Python === 'undefined') {
@@ -67,7 +66,7 @@ window.addEventListener('load', function () {
         var y = Blockly.Python.valueToCode(block, 'y', Blockly.Python.ORDER_ATOMIC);
         var t = Blockly.Python.valueToCode(block, 'text', Blockly.Python.ORDER_ATOMIC);
 
-        return 'oled.fill(0)\n' +
+        return 'oled.fill_rect(' + x + ', ' + y + ', len(str(' + t + ')) * 8, 8, 0)\n' +
                'oled.text(' + t + ', ' + x + ', ' + y + ')\n' +
                'oled.show()\n';
     };
@@ -77,7 +76,7 @@ window.addEventListener('load', function () {
         var y = Blockly.Python.valueToCode(block, 'y', Blockly.Python.ORDER_ATOMIC);
         var value = Blockly.Python.valueToCode(block, 'value', Blockly.Python.ORDER_ATOMIC);
 
-        return 'oled.fill(0)\n' +
+        return 'oled.fill_rect(' + x + ', ' + y + ', 32, 8, 0)\n' +
                'oled.text(str(' + value + '), ' + x + ', ' + y + ')\n' +
                'oled.show()\n';
     };
