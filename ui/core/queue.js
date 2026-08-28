@@ -190,8 +190,8 @@ window.addEventListener('load', function () {
                 .appendField('VL53L0X distance (mm)')
                 .appendField('address')
                 .appendField(new Blockly.FieldTextInput('0x29'), 'ADDRESS');
-            this.setOutput(true, 'Number');
-            this.setTooltip('Read distance in millimetres from the VL53L0X at this address.');
+            this.setOutput(true, null);
+            this.setTooltip('Read distance in millimetres. Returns ???? when the sensor reports out of range.');
         }
     };
 
@@ -220,7 +220,8 @@ window.addEventListener('load', function () {
     Blockly.Python['vl53l0x_distance'] = function(block) {
         var address = block.getFieldValue('ADDRESS') || '0x29';
         var key = vl53AddressKey(address);
-        return ['tof_' + key + '.range', Blockly.Python.ORDER_FUNCTION_CALL];
+        var reading = 'tof_' + key + '.range';
+        return ['(lambda _d: "????" if _d >= 8190 else _d)(' + reading + ')', Blockly.Python.ORDER_FUNCTION_CALL];
     };
 
     /*
