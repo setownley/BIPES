@@ -12,11 +12,9 @@ function Queue(num) {
 	   var elements = [];
 	   localStorage.setItem("queue" + this.qn, JSON.stringify(elements));
    }
-   //console.log('queue' + num);
 }
 
 Queue.prototype.enqueue = function (e) {
-   //console.log('push queue' + this.qn);
    var elements = JSON.parse(localStorage.getItem("queue" + this.qn));
    elements.push(e);
    localStorage.setItem("queue" + this.qn, JSON.stringify(elements));
@@ -33,13 +31,6 @@ Queue.prototype.isEmpty = function () {
     var elements = JSON.parse(localStorage.getItem("queue" + this.qn));
     return elements.length == 0;
 };
-
-/*
-Queue.prototype.peek = function () {
-    var elements = JSON.parse(localStorage.getItem("queue"));
-    return !isEmpty() ? elements[0] : undefined;
-};
-*/
 
 Queue.prototype.length = function() {
     var elements = JSON.parse(localStorage.getItem("queue" + this.qn));
@@ -87,7 +78,10 @@ if (typeof xhrGET === 'function') {
 window.addEventListener('load', function () {
     if (typeof Blockly === 'undefined' || typeof Blockly.Python === 'undefined') return;
 
-    /* Remove only the word strapping from the displayed GPIO2 label. */
+    /*
+     * Student-friendly GPIO labels. The underlying GPIO values are unchanged;
+     * only the names shown in the dropdown are adjusted.
+     */
     if (Blockly.Blocks['pinout']) {
         var classroomOriginalPinoutInit = Blockly.Blocks['pinout'].init;
         Blockly.Blocks['pinout'].init = function() {
@@ -96,8 +90,23 @@ window.addEventListener('load', function () {
             if (pinField && Array.isArray(pinField.menuGenerator_)) {
                 pinField.menuGenerator_ = pinField.menuGenerator_.map(function(option) {
                     var label = option[0];
-                    if (typeof label === 'string' && /GPIO2\b/.test(label)) {
-                        label = label.replace(/\s*\/\s*strapping\b/ig, '');
+                    var value = String(option[1]);
+                    if (typeof label === 'string') {
+                        if (value === '2') {
+                            label = label.replace(/\s*\/\s*strapping\b/ig, '');
+                        }
+                        if (value === '8' && label.indexOf('On-board LED') === -1) {
+                            label += ' / On-board LED';
+                        }
+                        if (value === '9' && label.indexOf('BOOT Btn') === -1) {
+                            label += ' / BOOT Btn';
+                        }
+                        if (value === '20' && !/\bRX\b/.test(label)) {
+                            label += ' / RX';
+                        }
+                        if (value === '21' && !/\bTX\b/.test(label)) {
+                            label += ' / TX';
+                        }
                     }
                     return [label, option[1]];
                 });
