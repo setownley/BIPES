@@ -37,13 +37,43 @@ Queue.prototype.length = function() {
     return elements.length == 0 ? 0 : elements.length;
 }
 
-/* Classroom toolbox additions. */
+/* Classroom toolbox additions.
+ *
+ * The VL53L0X category is injected here at runtime rather than written into
+ * ui/toolbox/esp32.xml. Mind the two shapes xhrGET hands back for a 'document'
+ * response: over http it is XMLHttpRequest.responseXML, a real XMLDocument;
+ * on file:// it is the pre-baked hidden element from index.html, which is an
+ * Element and has no createElement of its own. Take the owning document in
+ * both cases - calling response.createElement directly threw on the offline
+ * build and lost the whole category.
+ */
 if (typeof xhrGET === 'function') {
     var classroomOriginalXhrGET = xhrGET;
+
+    /* A missing category means the blocks are loaded but unreachable from the
+       palette - a broken classroom build that looks fine until a student goes
+       hunting. Say so in the app's own notification area, not just the console
+       where nobody is looking. */
+    var classroomToolboxFailed = function (why, err) {
+        var msg = 'Classroom toolbox: the VL53L0X blocks could not be added ('
+                + why + '). They are loaded but will not appear in the palette.';
+        console.error(msg, err || '');
+        var shout = function () {
+            if (typeof UI !== 'undefined' && UI['notify'] && UI['notify'].send)
+                UI['notify'].send(msg);
+        };
+        if (document.readyState === 'complete') shout();
+        else window.addEventListener('load', shout, false);
+    };
+
     xhrGET = function(filename, responsetype, onsuccess, onfail) {
         return classroomOriginalXhrGET(filename, responsetype, function(response) {
-            try {
-                if (responsetype === 'document' && /toolbox\/esp32\.xml/i.test(filename)) {
+            if (responsetype === 'document' && /toolbox\/esp32\.xml/i.test(filename)) {
+                try {
+                    var doc = response.nodeType === 9 ? response : response.ownerDocument;
+                    if (!doc || typeof doc.createElement !== 'function')
+                        throw new Error('no owning document for the toolbox XML');
+
                     var categories = response.querySelectorAll('category');
                     var sensors = null;
                     for (var i = 0; i < categories.length; i++) {
@@ -53,21 +83,29 @@ if (typeof xhrGET === 'function') {
                             break;
                         }
                     }
-                    if (sensors && !response.querySelector('block[type="vl53l0x_init"]')) {
-                        var tofCategory = response.createElement('category');
+                    if (!sensors)
+                        throw new Error('no CAT_SENSORS category to attach to');
+
+                    if (!response.querySelector('block[type="vl53l0x_init"]')) {
+                        var tofCategory = doc.createElement('category');
                         tofCategory.setAttribute('name', 'VL53L0X Time of Flight');
                         tofCategory.setAttribute('colour', '190');
-                        var initBlock = response.createElement('block');
+                        var initBlock = doc.createElement('block');
                         initBlock.setAttribute('type', 'vl53l0x_init');
                         tofCategory.appendChild(initBlock);
-                        var distanceBlock = response.createElement('block');
+                        var distanceBlock = doc.createElement('block');
                         distanceBlock.setAttribute('type', 'vl53l0x_distance');
                         tofCategory.appendChild(distanceBlock);
                         sensors.appendChild(tofCategory);
+
+                        /* Confirm it reads back: appending into the wrong
+                           document or namespace fails silently otherwise. */
+                        if (!response.querySelector('block[type="vl53l0x_init"]'))
+                            throw new Error('category attached but not readable back');
                     }
+                } catch (e) {
+                    classroomToolboxFailed(e.message, e);
                 }
-            } catch (e) {
-                console.warn('Could not add classroom VL53L0X toolbox blocks:', e);
             }
             onsuccess(response);
         }, onfail);

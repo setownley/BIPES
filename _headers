@@ -20,3 +20,19 @@
 
 /ui/toolbox/*
   Cache-Control: no-store
+
+# core/queue.js is the same hazard wearing different clothes. It began as a
+# localStorage helper, but now also defines the VL53L0X and classroom I2C
+# blocks and injects their toolbox category at runtime, so a stale copy means
+# blocks that quietly do not exist. It is the one file under core/ whose
+# staleness removes functionality rather than just ageing it, hence a rule
+# here as well as the ?ver= in index.html: the query string covers deploys
+# where index.html is fresh, this covers the rest.
+#
+# no-cache rather than the no-store used above: this one is a script, not a
+# pin list. Revalidating gives a 304 and no body on the common path, which
+# matters for a classroom sharing one connection, and a wrong answer here
+# costs missing blocks rather than a bricked board.
+
+/ui/core/queue.js
+  Cache-Control: no-cache
