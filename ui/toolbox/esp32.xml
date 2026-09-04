@@ -1269,6 +1269,12 @@
 
   </category>
 
+  <category name="Gyro" colour="20">
+    <block type="gyro_setup"></block>
+    <block type="gyro_reset"></block>
+    <block type="gyro_turn"></block>
+  </category>
+
       <category name="OneWire">
       <label text="OneWire"></label>
 

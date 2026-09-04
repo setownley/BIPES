@@ -62,8 +62,9 @@ function checkCookie() {
   <script src="core/code.js?ver=0.2.3.1125"></script>
   <script src="core/channel.js?ver=0.2.5.0820"></script>
   <script src="core/utils.js?ver=0.2.5.0820"></script>
-  <script src="core/ui.js?ver=0.2.6.0831"></script>
+  <script src="core/ui.js?ver=0.2.7.0905"></script>
   <script src="core/queue.js?ver=0.2.6.0831"></script>
+  <script src="core/gyro_blocks.js?ver=0.2.7.0905"></script>
   <script src="core/FileSaver.js"></script>
   <script src="core/shortcut.js"></script>
 
@@ -1990,6 +1991,12 @@ function eraseCookieModal(name) {
     <block type="mpu6050_read_gyro_z"> </block>
 
 
+  </category>
+
+  <category name="Gyro" colour="20">
+    <block type="gyro_setup"></block>
+    <block type="gyro_reset"></block>
+    <block type="gyro_turn"></block>
   </category>
 
       <category name="OneWire">
