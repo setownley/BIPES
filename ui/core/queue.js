@@ -53,9 +53,11 @@ if (typeof xhrGET === 'function') {
     /* A missing category means the blocks are loaded but unreachable from the
        palette - a broken classroom build that looks fine until a student goes
        hunting. Say so in the app's own notification area, not just the console
-       where nobody is looking. */
-    var classroomToolboxFailed = function (why, err) {
-        var msg = 'Classroom toolbox: the VL53L0X blocks could not be added ('
+       where nobody is looking. `which` names the category that failed, since
+       two independent ones share this function and a hardcoded name would
+       misreport which one is actually missing. */
+    var classroomToolboxFailed = function (which, why, err) {
+        var msg = 'Classroom toolbox: the ' + which + ' could not be added ('
                 + why + '). They are loaded but will not appear in the palette.';
         console.error(msg, err || '');
         var shout = function () {
@@ -69,13 +71,10 @@ if (typeof xhrGET === 'function') {
     xhrGET = function(filename, responsetype, onsuccess, onfail) {
         return classroomOriginalXhrGET(filename, responsetype, function(response) {
             if (responsetype === 'document' && /toolbox\/esp32\.xml/i.test(filename)) {
-                try {
-                    var doc = response.nodeType === 9 ? response : response.ownerDocument;
-                    if (!doc || typeof doc.createElement !== 'function')
-                        throw new Error('no owning document for the toolbox XML');
-
+                var doc = response.nodeType === 9 ? response : response.ownerDocument;
+                var sensors = null;
+                if (doc && typeof doc.createElement === 'function') {
                     var categories = response.querySelectorAll('category');
-                    var sensors = null;
                     for (var i = 0; i < categories.length; i++) {
                         var name = categories[i].getAttribute('name') || '';
                         if (name.indexOf('CAT_SENSORS') !== -1) {
@@ -83,6 +82,13 @@ if (typeof xhrGET === 'function') {
                             break;
                         }
                     }
+                }
+
+                /* Each category gets its own try/catch: a failure adding one
+                   must not prevent the other from being attached. */
+                try {
+                    if (!doc || typeof doc.createElement !== 'function')
+                        throw new Error('no owning document for the toolbox XML');
                     if (!sensors)
                         throw new Error('no CAT_SENSORS category to attach to');
 
@@ -104,7 +110,31 @@ if (typeof xhrGET === 'function') {
                             throw new Error('category attached but not readable back');
                     }
                 } catch (e) {
-                    classroomToolboxFailed(e.message, e);
+                    classroomToolboxFailed('VL53L0X blocks', e.message, e);
+                }
+
+                try {
+                    if (!doc || typeof doc.createElement !== 'function')
+                        throw new Error('no owning document for the toolbox XML');
+                    if (!sensors)
+                        throw new Error('no CAT_SENSORS category to attach to');
+
+                    if (!response.querySelector('block[type="gyro_init"]')) {
+                        var gyroCategory = doc.createElement('category');
+                        gyroCategory.setAttribute('name', 'MPU-6050 Gyro');
+                        gyroCategory.setAttribute('colour', '20');
+                        ['gyro_init', 'gyro_stop', 'gyro_reset', 'gyro_turn'].forEach(function (t) {
+                            var b = doc.createElement('block');
+                            b.setAttribute('type', t);
+                            gyroCategory.appendChild(b);
+                        });
+                        sensors.appendChild(gyroCategory);
+
+                        if (!response.querySelector('block[type="gyro_init"]'))
+                            throw new Error('category attached but not readable back');
+                    }
+                } catch (e) {
+                    classroomToolboxFailed('gyro blocks', e.message, e);
                 }
             }
             onsuccess(response);
@@ -246,5 +276,84 @@ window.addEventListener('load', function () {
         return 'oled.fill_rect(' + x + ', ' + y + ', 32, 8, 0)\n' +
                'oled.text(str(' + value + '), ' + x + ', ' + y + ')\n' +
                'oled.show()\n';
+    };
+
+    /* MPU-6050 gyro: turn angle only, matching firmware/gyro.py. SDA / SCL /
+       address default to 0, same as the ToF and OLED blocks above, so
+       students wire up the real values themselves. */
+    Blockly.Blocks['gyro_init'] = {
+        init: function() {
+            this.setColour(20);
+            this.appendDummyInput().appendField('Start MPU-6050 gyro');
+            this.appendDummyInput().appendField(new Blockly.FieldImage("media/mpu6050.jpg", 55, 55, "*"));
+            this.appendDummyInput()
+                .appendField('I2C').appendField(new Blockly.FieldDropdown([['0', '0'], ['1', '1']]), 'I2C')
+                .appendField('SDA').appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SDA')
+                .appendField('SCL').appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SCL');
+            this.appendDummyInput()
+                .appendField('Address 0x')
+                .appendField(new Blockly.FieldTextInput('0'), 'ADDRESS');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Initialise the gyro and start measuring turns in the background. KEEP THE ROBOT STILL for half a second while it calibrates. Students must set the bus, SDA, SCL and address.');
+        }
+    };
+
+    Blockly.Blocks['gyro_stop'] = {
+        init: function() {
+            this.setColour(20);
+            this.appendDummyInput().appendField('Stop gyro');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Stop measuring turns and free the timer. Use at the end of a program, or before code that needs the I2C bus to itself.');
+        }
+    };
+
+    Blockly.Blocks['gyro_reset'] = {
+        init: function() {
+            this.setColour(20);
+            this.appendDummyInput().appendField('Reset turn angle to 0');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Set the turn angle back to zero. Use immediately before each turn.');
+        }
+    };
+
+    Blockly.Blocks['gyro_turn'] = {
+        init: function() {
+            this.setColour(20);
+            this.appendDummyInput().appendField('Turn angle in degrees (+ right, - left)');
+            this.setOutput(true, null);
+            this.setTooltip('Degrees turned since the last reset. Measured continuously in the background, so it reads correctly however often you check it.');
+        }
+    };
+
+    Blockly.Python['gyro_init'] = function(block) {
+        var i2c = block.getFieldValue('I2C') || '0';
+        var sda = block.getFieldValue('SDA') || '0';
+        var scl = block.getFieldValue('SCL') || '0';
+        var address = classroomHexAddress(block.getFieldValue('ADDRESS'));
+        Blockly.Python.definitions_['import_gyro'] =
+            'from gyro import gyro_setup, gyro_stop, gyro_turn, gyro_reset';
+        return 'gyro_setup(bus=' + i2c + ', sda=' + sda + ', scl=' + scl +
+               ', addr=' + address + ')\n';
+    };
+
+    Blockly.Python['gyro_stop'] = function(block) {
+        Blockly.Python.definitions_['import_gyro'] =
+            'from gyro import gyro_setup, gyro_stop, gyro_turn, gyro_reset';
+        return 'gyro_stop()\n';
+    };
+
+    Blockly.Python['gyro_reset'] = function(block) {
+        Blockly.Python.definitions_['import_gyro'] =
+            'from gyro import gyro_setup, gyro_stop, gyro_turn, gyro_reset';
+        return 'gyro_reset()\n';
+    };
+
+    Blockly.Python['gyro_turn'] = function(block) {
+        Blockly.Python.definitions_['import_gyro'] =
+            'from gyro import gyro_setup, gyro_stop, gyro_turn, gyro_reset';
+        return ['gyro_turn()', Blockly.Python.ORDER_FUNCTION_CALL];
     };
 });

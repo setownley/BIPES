@@ -36,12 +36,3 @@
 
 /ui/core/queue.js
   Cache-Control: no-cache
-
-# core/gyro_blocks.js is the same case as queue.js above: it defines the
-# gyro_setup / gyro_reset / gyro_turn blocks and generators, so a stale copy
-# means those blocks silently do not exist. Its toolbox entry is a static
-# category in esp32.xml (covered by the no-store rule above), not a runtime
-# injection, so this file only needs to stay in step with itself.
-
-/ui/core/gyro_blocks.js
-  Cache-Control: no-cache
