@@ -449,7 +449,7 @@ class files {
     });
     this.fileList = get('#fileList');
     this.file_save_as = get('#file_save_as');
-    this.pylibsPanel = get('#pylibsPanel');
+    this.pylibsDialog = get('#pylibsDialog');
     this.pylibsList = get('#pylibsList');
     this.blocks2Code = {Python: get('#blocks2codePython'), XML: get('#blocks2codeXML')}
     this.blocks2Code.Python.onclick = () => {this.internalPython ()};
@@ -931,18 +931,23 @@ class files {
     }
   }
   /**
-   * Toggle the "Library files" picker open/closed (the cloud icon next to
-   * "List Files"). Refreshes the device file list on open, if connected, so
-   * the "on board" markers reflect what is actually there right now rather
-   * than whatever the last unrelated refresh happened to see.
+   * Toggle the "Library files" dialog open/closed (the cloud icon next to
+   * "Upload script to device"). A real <dialog>, not a section living in the
+   * page - closed, it takes no space and shows nothing in the Files tab; the
+   * on-device file list is untouched either way. Refreshes the device file
+   * list on open, if connected, so the "on board" markers reflect what is
+   * actually there right now rather than whatever the last unrelated
+   * refresh happened to see.
    */
   togglePylibs () {
-    if (!this.pylibsPanel) return;
-    this.pylibsPanel.hidden = !this.pylibsPanel.hidden;
-    if (!this.pylibsPanel.hidden) {
-      this.renderPylibs();
-      if (mux.connected()) this.listFiles();
+    if (!this.pylibsDialog) return;
+    if (this.pylibsDialog.open) {
+      this.pylibsDialog.close();
+      return;
     }
+    this.renderPylibs();
+    if (mux.connected()) this.listFiles();
+    this.pylibsDialog.showModal();
   }
   /**
    * (Re)draw the fixed PYLIB_FILES list as checkboxes, flagging any already
@@ -963,7 +968,10 @@ class files {
   }
   /**
    * Fetch every checked library file from the server (or, offline, the
-   * bake_offline.py copy) and write them all to the board.
+   * bake_offline.py copy) and write them all to the board. Closes the
+   * dialog immediately once a valid selection is confirmed - the fetch and
+   * write happen in the background, reported via the Files tab's own status
+   * line and notifications, same as every other Files-tab operation.
    */
   sendPylibs () {
     if (!mux.connected()) {
@@ -971,7 +979,11 @@ class files {
       return;
     }
     let checked = PYLIB_FILES.filter((name) => {
-      let cb = get('#pylib_' + name);
+      // getElementById, not get()/querySelector: every one of these ids
+      // ends in a literal ".py", and querySelector('#pylib_gyro.py') parses
+      // that dot as a class selector (id=pylib_gyro, class=py) - always
+      // null, so this always silently found nothing checked.
+      let cb = document.getElementById('pylib_' + name);
       return cb && cb.checked;
     });
     if (checked.length === 0) {
@@ -979,6 +991,7 @@ class files {
       return;
     }
 
+    if (this.pylibsDialog) this.pylibsDialog.close();
     files.update_file_status('Fetching ' + checked.join(', ') + ' from the server...');
     let fetched = [];
     let failed = [];

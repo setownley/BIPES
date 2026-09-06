@@ -61,7 +61,7 @@ function checkCookie() {
   <script src="core/python_compressed.js?ver=0.2.3.9292231"></script>
   <script src="core/code.js?ver=0.2.3.1125"></script>
   <script src="core/channel.js?ver=0.2.5.0820"></script>
-  <script src="core/utils.js?ver=0.2.6.0906"></script>
+  <script src="core/utils.js?ver=0.2.8.0906"></script>
   <script src="core/ui.js?ver=0.2.13.0906"></script>
   <script src="core/queue.js?ver=0.2.12.0906"></script>
   <script src="core/games.js?ver=0.2.12.0906"></script>
@@ -304,11 +304,6 @@ document.body.appendChild(el);
   <button value="List Files" id="refreshFilesList" class="notext button icon" title="Refresh device file list" onclick="Files.listFiles();" /></button>
   </summary>
   <span id='fileList'>...</span>
-  <span id='pylibsPanel' hidden>
-    <p>Library files (from the server, straight to the board - no trip through the editor):</p>
-    <span id='pylibsList'>...</span>
-    <button id="sendPylibsButton" class="button icon text" title="Write the checked files to the board" onclick="Files.sendPylibs();">Send to board</button>
-  </span>
   </details>
   <details open>
   <summary><h2>Blocks to code</h2></summary>
@@ -357,6 +352,15 @@ document.body.appendChild(el);
 <div class='progress-bar'></div>
 <div class="notify"></div>
 <div class="notify-panel"></div>
+<dialog id="pylibsDialog">
+  <h3>Library files</h3>
+  <p>From the server, straight to the board - no trip through the editor.</p>
+  <span id='pylibsList'>...</span>
+  <div id="pylibsDialogButtons">
+    <button id="sendPylibsButton" class="button icon text" title="Write the checked files to the board" onclick="Files.sendPylibs();">Send to board</button>
+    <button id="cancelPylibsButton" class="button text" onclick="Files.togglePylibs();">Cancel</button>
+  </div>
+</dialog>
 <div class="account-panel">
   <span>
     <span id="account_header">Hello, <span id="account_user" role="textbox" contenteditable>User</span>!</span>
