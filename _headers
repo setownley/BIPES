@@ -36,3 +36,11 @@
 
 /ui/core/queue.js
   Cache-Control: no-cache
+
+# games.js is queue.js's own Games-category injection and block/generator
+# definitions, split into its own file once the embedded standalone games
+# made queue.js's growth unbounded (see games.js's header comment). Same
+# hazard, same fix: a stale copy means missing or outdated game blocks.
+
+/ui/core/games.js
+  Cache-Control: no-cache

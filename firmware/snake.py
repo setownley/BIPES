@@ -7,6 +7,9 @@
 # Controls:
 #   TAP BOOT = turn clockwise 90 degrees
 #   RESET    = exit game / reboot normally
+#   Game over: TAP = retry, HOLD ~2s = clear the saved high score
+#
+# High score persists in snake_hi.txt on flash.
 
 import time
 import random
@@ -29,6 +32,25 @@ ROWS = (VISIBLE_H - PLAY_Y) // GRID  # 8
 START_SPEED_MS = 180
 MIN_SPEED_MS = 70
 SPEED_STEP_MS = 5
+
+HI_FILE = "snake_hi.txt"
+HOLD_CLEAR_MS = 2000       # game-over hold to clear the high score
+
+
+def _load_hi():
+    try:
+        with open(HI_FILE) as f:
+            return int(f.read())
+    except (OSError, ValueError):
+        return 0
+
+
+def _save_hi(v):
+    try:
+        with open(HI_FILE, "w") as f:
+            f.write(str(v))
+    except OSError:
+        pass
 
 
 def _spawn_food(snake):
@@ -57,22 +79,71 @@ def _wait_for_tap(button):
     time.sleep_ms(80)
 
 
-def _show_game_over(oled, button, x0, y0, score):
+def _show_game_over(oled, button, x0, y0, score, hi):
+    """Show the result and wait. Returns the (possibly cleared) high score.
+
+    Holding the button for two seconds wipes the saved score. Same gesture
+    as invaders.py, so a student who learns it in one game knows it in the
+    other.
+    """
+    beat = score > hi
+    if beat:
+        hi = score
+        _save_hi(hi)
+
     oled.fill(0)
-    oled.text("GAME OVER", x0, y0)
+    oled.text("NEW BEST!" if beat else "GAME OVER", x0, y0)
     oled.text("SCORE " + str(score), x0, y0 + 8)
+    oled.text("BEST  " + str(hi), x0, y0 + 16)
     oled.text("TAP RETRY", x0, y0 + 24)
     oled.show()
 
     time.sleep_ms(400)
-    _wait_for_tap(button)
+
+    # Only a SHORT tap restarts, matching invaders.py and defender.py. If any
+    # release restarted, the two-second hold that clears the score would
+    # restart on release too and the confirmation would vanish unread.
+    cleared = False
+    while True:
+        while button.value() == 1:
+            time.sleep_ms(20)
+
+        held_from = time.ticks_ms()
+        while button.value() == 0:
+            if (not cleared) and time.ticks_diff(
+                    time.ticks_ms(), held_from) > HOLD_CLEAR_MS:
+                hi = 0
+                _save_hi(0)
+                cleared = True
+                oled.fill(0)
+                oled.text("HI SCORE", x0, y0 + 8)
+                oled.text("CLEARED", x0, y0 + 20)
+                oled.show()
+            time.sleep_ms(20)
+
+        held = time.ticks_diff(time.ticks_ms(), held_from)
+        time.sleep_ms(80)          # debounce
+        if 0 < held < 600:
+            return hi
+        # A long press was the clear gesture, not a restart. Redraw and wait
+        # for the tap that actually restarts.
+        oled.fill(0)
+        oled.text("NEW BEST!" if beat else "GAME OVER", x0, y0)
+        oled.text("SCORE " + str(score), x0, y0 + 8)
+        oled.text("BEST  " + str(hi), x0, y0 + 16)
+        oled.text("TAP RETRY", x0, y0 + 24)
+        oled.show()
 
 
-def _draw(oled, x0, y0, snake, food, score):
+def _draw(oled, x0, y0, snake, food, score, hi=0):
     oled.fill(0)
 
-    # Score row + divider
+    # Score row + divider. The best score sits right-aligned so there is
+    # always something to beat on screen.
     oled.text(str(score), x0, y0)
+    if hi:
+        s = "H" + str(hi)
+        oled.text(s, x0 + VISIBLE_W - 8 * len(s), y0)
     oled.hline(x0, y0 + 7, VISIBLE_W, 1)
 
     # Food
@@ -103,6 +174,8 @@ def run(oled, button, x0=28, y0=24, led=None):
     Press the board RESET button to leave the game.
     """
 
+    hi = _load_hi()
+
     while True:
         # Start roughly in the middle of the 18x8 play field, moving right.
         snake = [[8, 4], [7, 4], [6, 4]]
@@ -112,10 +185,13 @@ def run(oled, button, x0=28, y0=24, led=None):
         speed_ms = START_SPEED_MS
         button_was_down = False
 
-        _draw(oled, x0, y0, snake, food, score)
+        _draw(oled, x0, y0, snake, food, score, hi)
 
         while True:
-            # Poll repeatedly during the movement delay so short taps register.
+            # Poll repeatedly during the movement delay so short taps
+            # register. A boolean rather than a counter, deliberately: two
+            # taps inside one step would otherwise turn 180 degrees straight
+            # into the snake's own neck, which reads as the game cheating.
             turned_this_step = False
             slices = 12
             slice_ms = max(1, speed_ms // slices)
@@ -163,7 +239,7 @@ def run(oled, button, x0=28, y0=24, led=None):
 
                 # Full board = win; show it through the normal game-over screen.
                 if food is None:
-                    _draw(oled, x0, y0, snake, food, score)
+                    _draw(oled, x0, y0, snake, food, score, hi)
                     break
 
                 speed_ms = max(
@@ -182,6 +258,6 @@ def run(oled, button, x0=28, y0=24, led=None):
             else:
                 snake.pop()
 
-            _draw(oled, x0, y0, snake, food, score)
+            _draw(oled, x0, y0, snake, food, score, hi)
 
-        _show_game_over(oled, button, x0, y0, score)
+        hi = _show_game_over(oled, button, x0, y0, score, hi)
