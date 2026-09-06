@@ -612,11 +612,6 @@ pre.content {
   justify-content: space-between;
   align-items: center;
 }
-.fileHeaderButtons {
-  display: flex;
-  align-items: center;
-  gap: .25rem;
-}
 #pylibsPanel {
   display: block;
   margin-top: .5rem;

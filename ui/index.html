@@ -283,6 +283,7 @@ document.body.appendChild(el);
     <span>File manager</span>
     <label id="putFileButton" for="put-file-select"  class="noteaxt button icon" title="Upload script to device"></label>
     <input name="PutFileList" id="put-file-select" type="file" accept=".md,.py" required="">
+    <button value="Library files" id="pylibsButton" class="notext button icon" title="Send library files from the server straight to the board" onclick="Files.togglePylibs();" /></button>
     <!--<input type="button" value="Run Blocks" onclick="Tool.runPython(); return false;" />-->
 
   </div>
@@ -300,10 +301,7 @@ document.body.appendChild(el);
   <details open>
   <summary>
   <h2>On device</h2>
-  <span class="fileHeaderButtons">
   <button value="List Files" id="refreshFilesList" class="notext button icon" title="Refresh device file list" onclick="Files.listFiles();" /></button>
-  <button value="Library files" id="pylibsButton" class="notext button icon" title="Send library files from the server straight to the board" onclick="Files.togglePylibs();" /></button>
-  </span>
   </summary>
   <span id='fileList'>...</span>
   <span id='pylibsPanel' hidden>
