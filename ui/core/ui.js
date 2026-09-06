@@ -341,7 +341,7 @@ notify.prototype.log = function (message) {
  * has to defeat copies already cached under the old policy. Bump it anyway if
  * you ever need to force a refetch for everyone.
  */
-const DATA_VER = '0.2.12.0906';
+const DATA_VER = '0.2.13.0906';
 
 /**
  * Do a XML Http request, if in offline mode, will try to find the data inside the index.html file.
@@ -377,6 +377,7 @@ async function xhrGET (filename, responsetype, onsuccess, onfail) {
       filename = filename.split('?') [0].replace(/[\/\.]/g, '_')
 	    let regex_xml = /_(.*)_xml/;
 	    let regex_json = /_(.*)_json/;
+	    let regex_py = /_py$/;
       if (regex_json.test (filename)) {
 	        window.addEventListener('load', () => {
             onsuccess(JSON.parse (eval(`OFFLINE_${filename}`)));
@@ -388,6 +389,27 @@ async function xhrGET (filename, responsetype, onsuccess, onfail) {
           UI ['notify'].send(MSG['noToolbox']);
         }
         onsuccess(xml_);
+      } else if (regex_py.test (filename)) {
+        // Plain text, not JSON - baked by bake_offline.py as the same kind
+        // of template-literal global as devinfo.json, just handed back as a
+        // string rather than JSON.parse'd. Used by the Files tab's Library
+        // files picker (ui/pylibs/*.py).
+        //
+        // Unlike devinfo/toolbox, which are always fetched during page
+        // bootstrap (before `load` fires), this is fetched on a user click
+        // that can happen long after the page finished loading - `load` has
+        // already fired by then, and registering for it again never calls
+        // back. Same readyState check queue.js's classroomToolboxFailed
+        // already uses for the same reason: resolve now if the page (and so
+        // every baked <script> block) is already loaded, else wait for it.
+        var resolvePy = () => {
+            var text = eval(`typeof OFFLINE_${filename} !== 'undefined' ? OFFLINE_${filename} : undefined`);
+            if (text !== undefined) onsuccess(text);
+            else if (onfail != undefined) onfail();
+            else UI ['notify'].send(`Could not find ${filename} in the offline copy.`);
+        };
+        if (document.readyState === 'complete') resolvePy();
+        else window.addEventListener('load', resolvePy, false);
 	    } else
 	      alert(`Could not find ${filename} locally, please run at a server or use the live version at bipes.net.br/beta2/ui.`);
 

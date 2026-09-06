@@ -557,7 +557,7 @@ pre.content {
   margin: 0;
   height: 2.5rem;
 }
-#fileList > div, #fileTemplate > div, #blocks2Code > div, #ProjectList > div{
+#fileList > div, #pylibsList > div, #blocks2Code > div, #ProjectList > div{
   display: flex;
   align-items: stretch;
   justify-content: space-between;
@@ -572,16 +572,16 @@ pre.content {
 #fileList > div > div:last-child, #ProjectList > div > div:last-child{
   flex-shrink: 0;
 }
-#fileList .runText, #ProjectList .runText {
+#fileList .runText, #pylibsList .runText, #ProjectList .runText {
   width: 100%;
   font-family: monospace;
 }
-#fileTemplate > div, #blocks2Code > div  {
+#pylibsList > div, #blocks2Code > div  {
   align-items: center;
   word-break: break-word;
   font-family: monospace;
 }
-#fileList > div > div, #ProjectList > div > div {
+#fileList > div > div, #pylibsList > div > div, #ProjectList > div > div {
   display: inline-flex;
   align-items: center;
   word-break: break-word;
@@ -611,6 +611,19 @@ pre.content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.fileHeaderButtons {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+}
+#pylibsPanel {
+  display: block;
+  margin-top: .5rem;
+}
+#pylibsPanel p {
+  font-size: 0.85rem;
+  margin: 0 0 .25rem 0;
 }
 #filesPanel summary > h2:before, .account-panel summary > h2:before {
   content: "\1433";
@@ -786,7 +799,17 @@ button.icon.medium:before  {
 #refreshFilesList:before {
   background-position: left calc(-1.5rem*18) top;
 }
-#putFileButton:before, #editor2DeviceButton:before, #generated2DeviceButton:before{
+/* Not part of the icons.svg sprite: that file is hand-authored in Inkscape
+   and editing it blind (no way to render/check the result here) risked
+   corrupting or misaligning the other 24 icons it already holds. This is
+   its own small asset instead, sized to the same 1.5rem box so it still
+   sits at the same size and weight as its neighbours. */
+#pylibsButton:before {
+  background-image: url(media/cloud.svg);
+  background-size: contain;
+  background-position: center;
+}
+#putFileButton:before, #editor2DeviceButton:before, #generated2DeviceButton:before, #sendPylibsButton:before{
   background-position: left calc(-1.5rem*19) top;
 }
 #updateXMLButton:before {

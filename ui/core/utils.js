@@ -293,7 +293,11 @@ class Tool {
   */
   static getText (pName) {
     var request = new XMLHttpRequest();
-        request.open('GET', '/beta2/ui/pylibs/' + pName, true);
+        // Relative, not upstream's hardcoded /beta2/ui/pylibs/: this fork is
+        // not served from /beta2/, so that path 404s here. Relative to
+        // wherever index.html itself loaded from, same as every other
+        // xhrGET() fetch in this codebase (toolbox XML, devinfo.json).
+        request.open('GET', 'pylibs/' + pName, true);
         request.send(null);
         request.onreadystatechange = function () {
         if (request.readyState === 4 && request.status === 200) {
@@ -410,6 +414,14 @@ class Tool {
 
 }
 /**
+ * Fixed set of driver/game files offered by the Files tab's "Library files"
+ * picker, fetched from ui/pylibs/ straight to the board. Adding one is a
+ * one-line change here plus a matching entry in bake_offline.py's PYLIBS
+ * list (offline copies) - nothing else in the picker needs to change.
+ */
+const PYLIB_FILES = ['gyro.py', 'vl53l0x_nb.py', 'ssd1306.py', 'invaders.py', 'snake.py', 'defender.py'];
+
+/**
  * Handle the Files tab.
  */
 class files {
@@ -424,6 +436,12 @@ class files {
     this.put_file_queue = [];
     this.received_string = "";
     this.viewOnly = false;
+    /** Filenames found on the board by the last listFiles() refresh, kept
+        around so the pylibs picker can mark what's already installed. */
+    this.deviceFiles = [];
+    /** {name: expectedByteLength} for a pylibs send still awaiting its
+        size-check readback. */
+    this.pylibExpectedSizes = {};
     /**Object that contains a ``codemirror`` editor*/
     this.editor = CodeMirror.fromTextArea(content_file_code, {
       mode: "python",
@@ -431,6 +449,8 @@ class files {
     });
     this.fileList = get('#fileList');
     this.file_save_as = get('#file_save_as');
+    this.pylibsPanel = get('#pylibsPanel');
+    this.pylibsList = get('#pylibsList');
     this.blocks2Code = {Python: get('#blocks2codePython'), XML: get('#blocks2codeXML')}
     this.blocks2Code.Python.onclick = () => {this.internalPython ()};
     this.blocks2Code.XML.onclick = () => {this.internalXML ()};
@@ -872,6 +892,7 @@ class files {
       let treat_ = match_ [match_.length - 1].replace(/[\[\]]/g, '');
       let split_ = treat_.split('"'[0]);
       let files_ = eval("[" + split_ + "]");
+      this.deviceFiles = files_;   // so the pylibs picker can mark what's already on board
 
       UI ['notify'].send("File list updated at " + Tool.unix2date() + ".");
 
@@ -906,7 +927,188 @@ class files {
       })
 
       Files.received_string = Files.received_string.replace(re, '\r\n') //purge received string out
+      this.renderPylibs();   // refresh "on board" markers if the picker is open
     }
+  }
+  /**
+   * Toggle the "Library files" picker open/closed (the cloud icon next to
+   * "List Files"). Refreshes the device file list on open, if connected, so
+   * the "on board" markers reflect what is actually there right now rather
+   * than whatever the last unrelated refresh happened to see.
+   */
+  togglePylibs () {
+    if (!this.pylibsPanel) return;
+    this.pylibsPanel.hidden = !this.pylibsPanel.hidden;
+    if (!this.pylibsPanel.hidden) {
+      this.renderPylibs();
+      if (mux.connected()) this.listFiles();
+    }
+  }
+  /**
+   * (Re)draw the fixed PYLIB_FILES list as checkboxes, flagging any already
+   * present on the board per the last listFiles() refresh.
+   */
+  renderPylibs () {
+    if (!this.pylibsList) return;
+    this.pylibsList.innerHTML = '';
+    PYLIB_FILES.forEach((name) => {
+      let row = new DOM('div');
+      let checkbox = new DOM('input', {type: 'checkbox', id: 'pylib_' + name, className: 'pylibCheckbox'});
+      let label = new DOM('span', {innerText: ' ' + name, className: 'runText'});
+      row.append([checkbox, label]);
+      if (this.deviceFiles.includes(name))
+        row.flag('on board');
+      this.pylibsList.appendChild(row._dom);
+    });
+  }
+  /**
+   * Fetch every checked library file from the server (or, offline, the
+   * bake_offline.py copy) and write them all to the board.
+   */
+  sendPylibs () {
+    if (!mux.connected()) {
+      UI ['notify'].send('Connect to the robot first, then try again.');
+      return;
+    }
+    let checked = PYLIB_FILES.filter((name) => {
+      let cb = get('#pylib_' + name);
+      return cb && cb.checked;
+    });
+    if (checked.length === 0) {
+      UI ['notify'].send('Select at least one library file first.');
+      return;
+    }
+
+    files.update_file_status('Fetching ' + checked.join(', ') + ' from the server...');
+    let fetched = [];
+    let failed = [];
+    let pending = checked.length;
+    let done = () => {
+      if (failed.length)
+        UI ['notify'].send('Could not fetch: ' + failed.join(', ') + '.');
+      if (fetched.length)
+        this.writePylibs(fetched);
+    };
+    checked.forEach((name) => {
+      xhrGET('pylibs/' + name + '?ver=' + DATA_VER, 'text', (text) => {
+        // TextEncoder, not str_bytes(): str_bytes() truncates every char to
+        // one byte (charCodeAt & 0xff), which is wrong for anything outside
+        // ASCII - snake.py's header comment has a real em dash. That would
+        // still "verify" clean, since the same wrong byte count would be
+        // compared on both sides, but it silently ships a corrupted byte in
+        // a file that's supposed to be an exact copy of the source.
+        fetched.push({name: name, data: new TextEncoder().encode(text)});
+        if (--pending === 0) done();
+      }, () => {
+        failed.push(name);
+        if (--pending === 0) done();
+      });
+    });
+  }
+  /**
+   * Write already-fetched library files to the board in one ordered stream,
+   * then read every one of their lengths back and compare against what was
+   * actually sent. A truncated write is otherwise silent - the file exists,
+   * just short - and only shows up later as a SyntaxError on import.
+   *
+   * webserial/webbluetooth only: this reuses the same "one ordered stream"
+   * reasoning as put_files() (see its own comment), plus a size-check
+   * command appended to the end of that same stream. WebREPL (websocket)
+   * cannot be folded into one stream - its file transfer is a separate
+   * binary sub-protocol, not text typed at the REPL - so for that channel
+   * this falls back to put_files()'s existing queued behaviour with no
+   * automated verification; the status text says so.
+   * @param {Array<{name: string, data: Uint8Array}>} items
+   */
+  writePylibs (items) {
+    let names = items.map((it) => it.name);
+
+    switch (Channel ['mux'].currentChannel) {
+      case 'webserial':
+      case 'webbluetooth': {
+        this.pylibExpectedSizes = {};
+        items.forEach((it) => { this.pylibExpectedSizes[it.name] = it.data.length; });
+
+        let cmds = this.put_file_preamble ();
+        items.forEach((it) => { cmds = cmds.concat (this.put_file_cmds (it.name, it.data)); });
+        cmds = cmds.concat (this.pylib_size_check_cmds (names));
+
+        let total = 0;
+        for (let i = 0; i < cmds.length; i++) total += cmds [i].length;
+        UI ['progress'].start (parseInt (total / Channel ['webserial'].packetSize) + 1);
+
+        mux.clearBuffer ();
+        mux.bufferUnshift ('\r\x03\x03');
+        for (let i = 0; i < cmds.length; i++) {
+          if (i === cmds.length - 1)
+            mux.bufferPush (cmds [i], this.checkPylibSizes.bind(this));
+          else
+            mux.bufferPush (cmds [i]);
+        }
+        mux.bufferPush ('\r\r\r');
+        files.update_file_status ('Sending ' + names.join(', ') + '...');
+        break;
+      }
+      default:
+        this.put_files (items);
+        UI ['notify'].send ('Sent ' + names.join(', ') + '. This channel cannot auto-verify - click "List Files" to confirm they arrived at full size.');
+        files.update_file_status ('Sent ' + names.join(', ') + ' (unverified on this channel).');
+    }
+  }
+  /**
+   * Single-statement (no multi-line def) REPL commands that print
+   * {filename: byte_length or -1} for the given names. Deliberately a
+   * one-liner: a multi-line function typed interactively needs the
+   * backspace-dedent trick get_file() uses, which a size check doesn't
+   * need to risk.
+   * @param {Array<string>} names
+   * @return {Array<string>}
+   */
+  pylib_size_check_cmds (names) {
+    let pyList = '[' + names.map((n) => "'" + n + "'").join(', ') + ']';
+    return [
+      'import os\r',
+      'print({n: (os.stat(n)[6] if n in os.listdir() else -1) for n in ' + pyList + '})\r'
+    ];
+  }
+  /**
+   * Parse the pylib_size_check_cmds() readback and report per-file
+   * OK/MISMATCH. Loud on any mismatch (console + notify), not a silent
+   * console.log - a short write is the "SyntaxError on import later" trap
+   * this whole check exists to catch before it gets that far.
+   */
+  checkPylibSizes () {
+    let re = /\{(.+)?\}/g;
+    let expected = this.pylibExpectedSizes || {};
+    let names = Object.keys(expected);
+    if (!re.test(this.received_string)) {
+      files.update_file_status ('Sent ' + names.join(', ') + ' (size check did not come back - check List Files manually).');
+      return;
+    }
+    let match_ = this.received_string.match(/\{(.+)?\}/g);
+    this.received_string = this.received_string.replace(re, '\r\n');   // purge, same as updateTable()
+
+    let got;
+    try {
+      got = eval('(' + match_ [match_.length - 1] + ')');   // parens: a bare leading `{` parses as a block, not an object
+    } catch (e) {
+      files.update_file_status ('Sent ' + names.join(', ') + ' (could not parse the size check).');
+      return;
+    }
+
+    let bad = [];
+    names.forEach((name) => {
+      if (got [name] !== expected [name]) bad.push(name);
+    });
+
+    if (bad.length) {
+      UI ['notify'].send ('Write incomplete for: ' + bad.join(', ') + '. Try sending again.');
+      files.update_file_status ('MISMATCH: ' + bad.join(', '));
+    } else {
+      UI ['notify'].send ('Sent and verified: ' + names.join(', ') + '.');
+      files.update_file_status ('Sent and verified: ' + names.join(', ') + '.');
+    }
+    if (mux.connected()) this.listFiles();   // refresh "on board" markers
   }
   /**
    * Push edited XML to the workspace.
@@ -972,6 +1174,13 @@ class DOM {
         this._dom = document.createElement (dom);
         if (typeof tags == 'object') for (const tag in tags) {
           if (['innerText', 'className', 'id', 'title', 'innerText'].includes(tag))
+            this._dom [tag] = tags [tag]
+        }
+        break;
+	  case 'input':
+        this._dom = document.createElement (dom);
+        if (typeof tags == 'object') for (const tag in tags) {
+          if (['type', 'id', 'className', 'title', 'value', 'checked'].includes(tag))
             this._dom [tag] = tags [tag]
         }
         break;

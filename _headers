@@ -44,3 +44,12 @@
 
 /ui/core/games.js
   Cache-Control: no-cache
+
+# pylibs/*.py are fetched straight to the board by the Files tab's "Library
+# files" picker (ui/core/utils.js), always with a ?ver= cache-buster, so this
+# is defence-in-depth rather than the whole fix - same reasoning as
+# queue.js's rule above: no-cache because a stale copy means an outdated
+# driver landing on the board, not a bricked one.
+
+/ui/pylibs/*
+  Cache-Control: no-cache
