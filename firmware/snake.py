@@ -1,0 +1,187 @@
+# snake.py — single-button Snake for the ESP32-C3 72x40 onboard OLED
+# Designed to be launched by robot.py:
+#
+#     import snake
+#     snake.run(_oled, _btn, OLED_X0, OLED_Y0, _led)
+#
+# Controls:
+#   TAP BOOT = turn clockwise 90 degrees
+#   RESET    = exit game / reboot normally
+
+import time
+import random
+
+VISIBLE_W = 72
+VISIBLE_H = 40
+GRID = 4
+
+DIR_UP = (0, -1)
+DIR_RIGHT = (1, 0)
+DIR_DOWN = (0, 1)
+DIR_LEFT = (-1, 0)
+DIR_SEQUENCE = (DIR_UP, DIR_RIGHT, DIR_DOWN, DIR_LEFT)
+
+# Top 8 pixels are reserved for the score.
+PLAY_Y = 8
+COLS = VISIBLE_W // GRID           # 18
+ROWS = (VISIBLE_H - PLAY_Y) // GRID  # 8
+
+START_SPEED_MS = 180
+MIN_SPEED_MS = 70
+SPEED_STEP_MS = 5
+
+
+def _spawn_food(snake):
+    """Pick an empty cell inside the play area."""
+    free = []
+    for y in range(ROWS):
+        for x in range(COLS):
+            if [x, y] not in snake:
+                free.append([x, y])
+
+    if not free:
+        return None
+
+    return free[random.randrange(len(free))]
+
+
+def _wait_for_tap(button):
+    """Wait for one clean press and release."""
+    while button.value() == 1:
+        time.sleep_ms(20)
+
+    while button.value() == 0:
+        time.sleep_ms(20)
+
+    # tiny debounce delay
+    time.sleep_ms(80)
+
+
+def _show_game_over(oled, button, x0, y0, score):
+    oled.fill(0)
+    oled.text("GAME OVER", x0, y0)
+    oled.text("SCORE " + str(score), x0, y0 + 8)
+    oled.text("TAP RETRY", x0, y0 + 24)
+    oled.show()
+
+    time.sleep_ms(400)
+    _wait_for_tap(button)
+
+
+def _draw(oled, x0, y0, snake, food, score):
+    oled.fill(0)
+
+    # Score row + divider
+    oled.text(str(score), x0, y0)
+    oled.hline(x0, y0 + 7, VISIBLE_W, 1)
+
+    # Food
+    if food is not None:
+        fx = x0 + food[0] * GRID
+        fy = y0 + PLAY_Y + food[1] * GRID
+        oled.fill_rect(fx, fy, GRID - 1, GRID - 1, 1)
+
+    # Snake
+    for i, segment in enumerate(snake):
+        sx = x0 + segment[0] * GRID
+        sy = y0 + PLAY_Y + segment[1] * GRID
+
+        # Head is solid 4x4; body is 3x3 so direction is easier to see.
+        if i == 0:
+            oled.fill_rect(sx, sy, GRID, GRID, 1)
+        else:
+            oled.fill_rect(sx, sy, GRID - 1, GRID - 1, 1)
+
+    oled.show()
+
+
+def run(oled, button, x0=28, y0=24, led=None):
+    """Run Snake using the robot's existing OLED and BOOT button.
+
+    The caller should stop robot Timer 0 before entering this function.
+    This function deliberately never returns during normal play.
+    Press the board RESET button to leave the game.
+    """
+
+    while True:
+        # Start roughly in the middle of the 18x8 play field, moving right.
+        snake = [[8, 4], [7, 4], [6, 4]]
+        dir_idx = 1
+        food = _spawn_food(snake)
+        score = 0
+        speed_ms = START_SPEED_MS
+        button_was_down = False
+
+        _draw(oled, x0, y0, snake, food, score)
+
+        while True:
+            # Poll repeatedly during the movement delay so short taps register.
+            turned_this_step = False
+            slices = 12
+            slice_ms = max(1, speed_ms // slices)
+
+            for _ in range(slices):
+                down = (button.value() == 0)
+
+                if down and not button_was_down:
+                    turned_this_step = True
+
+                button_was_down = down
+                time.sleep_ms(slice_ms)
+
+            if turned_this_step:
+                dir_idx = (dir_idx + 1) % 4
+
+            dx, dy = DIR_SEQUENCE[dir_idx]
+            new_head = [
+                snake[0][0] + dx,
+                snake[0][1] + dy,
+            ]
+
+            # Wall collision
+            if (
+                new_head[0] < 0
+                or new_head[0] >= COLS
+                or new_head[1] < 0
+                or new_head[1] >= ROWS
+            ):
+                break
+
+            eating = (food is not None and new_head == food)
+
+            # Moving into the current tail cell is legal when the tail is
+            # about to move away; all other body collisions end the round.
+            body_to_check = snake if eating else snake[:-1]
+            if new_head in body_to_check:
+                break
+
+            snake.insert(0, new_head)
+
+            if eating:
+                score += 1
+                food = _spawn_food(snake)
+
+                # Full board = win; show it through the normal game-over screen.
+                if food is None:
+                    _draw(oled, x0, y0, snake, food, score)
+                    break
+
+                speed_ms = max(
+                    MIN_SPEED_MS,
+                    START_SPEED_MS - score * SPEED_STEP_MS
+                )
+
+                # Tiny LED flash on food if an LED object was supplied.
+                if led is not None:
+                    try:
+                        led.value(0)  # onboard LED is inverted on this board
+                        time.sleep_ms(35)
+                        led.value(1)
+                    except Exception:
+                        pass
+            else:
+                snake.pop()
+
+            _draw(oled, x0, y0, snake, food, score)
+
+        _show_game_over(oled, button, x0, y0, score)

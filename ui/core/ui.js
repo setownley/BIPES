@@ -341,7 +341,7 @@ notify.prototype.log = function (message) {
  * has to defeat copies already cached under the old policy. Bump it anyway if
  * you ever need to force a refetch for everyone.
  */
-const DATA_VER = '0.2.10.0906';
+const DATA_VER = '0.2.11.0906';
 
 /**
  * Do a XML Http request, if in offline mode, will try to find the data inside the index.html file.

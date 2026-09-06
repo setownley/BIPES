@@ -160,23 +160,39 @@ if (typeof xhrGET === 'function') {
                     if (!micropython || !micropython.parentNode)
                         throw new Error('no MicroPython category to anchor below');
 
-                    if (!response.querySelector('block[type="play_invaders"]')) {
-                        var gamesCategory = doc.createElement('category');
-                        gamesCategory.setAttribute('name', 'Games');
-                        gamesCategory.setAttribute('colour', '290');
+                    /* One block per game. Add a new game by adding its block
+                       type to this array - nothing else here needs to
+                       change. Finds the Games category if an earlier pass
+                       already created one and tops up whatever is missing,
+                       rather than assuming all-or-nothing, so a growing
+                       gameBlocks list can never end up with two Games
+                       categories side by side. */
+                    var gameBlocks = ['play_invaders', 'play_snake'];
+                    var hasBlock = function (t) { return !!response.querySelector('block[type="' + t + '"]'); };
 
-                        /* One block per game. Add a new game by adding its
-                           block type to this array - nothing else here
-                           needs to change. */
-                        var gameBlocks = ['play_invaders'];
+                    if (!gameBlocks.every(hasBlock)) {
+                        var gamesCategory = null;
+                        for (var gc = 0; gc < allCategories.length; gc++) {
+                            if (allCategories[gc].getAttribute('name') === 'Games') {
+                                gamesCategory = allCategories[gc];
+                                break;
+                            }
+                        }
+                        if (!gamesCategory) {
+                            gamesCategory = doc.createElement('category');
+                            gamesCategory.setAttribute('name', 'Games');
+                            gamesCategory.setAttribute('colour', '290');
+                            micropython.parentNode.appendChild(gamesCategory);
+                        }
+
                         gameBlocks.forEach(function (t) {
+                            if (hasBlock(t)) return;   // already there
                             var b = doc.createElement('block');
                             b.setAttribute('type', t);
                             gamesCategory.appendChild(b);
                         });
-                        micropython.parentNode.appendChild(gamesCategory);
 
-                        if (!response.querySelector('block[type="play_invaders"]'))
+                        if (!gameBlocks.every(hasBlock))
                             throw new Error('category attached but not readable back');
                     }
                 } catch (e) {
@@ -457,5 +473,49 @@ window.addEventListener('load', function () {
                 '_inv_i2c = I2C(0, scl=Pin(' + scl + '), sda=Pin(' + sda + '), freq=400000)\n' +
                 '_inv_oled = ssd1306.SSD1306_I2C(128, 64, _inv_i2c)\n' +
                 'invaders.run(_inv_oled, Pin(9, Pin.IN, Pin.PULL_UP), led=Pin(8, Pin.OUT))\n';
+    };
+
+    /* Second entry in the Games category, same shape as Invaders: one
+       button (tap BOOT to turn right), snake.run() never returns, matching
+       firmware/snake.py. SDA/SCL default to 5/6 (the OLED's real wiring on
+       every classroom robot) and the generator guards SDA == SCL, for the
+       same reason as Invaders - see the comment on that block. */
+    Blockly.Blocks['play_snake'] = {
+        init: function() {
+            this.setColour(290);
+            this.appendDummyInput().appendField('Play Snake');
+            this.appendDummyInput().appendField(new Blockly.FieldImage("media/snake.jpg", 55, 55, "*"));
+            this.appendDummyInput()
+                .appendField('SDA').appendField(new Blockly.FieldNumber(5, 0, 48, 1), 'SDA')
+                .appendField('SCL').appendField(new Blockly.FieldNumber(6, 0, 48, 1), 'SCL');
+            this.setPreviousStatement(true, null);
+            this.setTooltip('Start Snake on the OLED. Tap BOOT to turn right. This block never finishes - press RST on the board to get back to your program. Anything after it will not run.');
+        }
+    };
+
+    Blockly.Python['play_snake'] = function(block) {
+        var sda = block.getFieldValue('SDA') || '0';
+        var scl = block.getFieldValue('SCL') || '0';
+
+        Blockly.Python.definitions_['import_snake'] =
+            'import snake\n' +
+            'from machine import Pin, I2C\n' +
+            'import ssd1306';
+
+        return  'try:\n' +
+                '    from gyro import gyro_stop\n' +
+                '    gyro_stop()\n' +
+                'except Exception:\n' +
+                '    pass\n' +
+                'try:\n' +
+                '    import robot\n' +
+                '    robot.os_timer(False)\n' +
+                'except Exception:\n' +
+                '    pass\n' +
+                'if ' + sda + ' == ' + scl + ':\n' +
+                '    raise ValueError("Play Snake: SDA and SCL cannot be the same pin")\n' +
+                '_snk_i2c = I2C(0, scl=Pin(' + scl + '), sda=Pin(' + sda + '), freq=400000)\n' +
+                '_snk_oled = ssd1306.SSD1306_I2C(128, 64, _snk_i2c)\n' +
+                'snake.run(_snk_oled, Pin(9, Pin.IN, Pin.PULL_UP), led=Pin(8, Pin.OUT))\n';
     };
 });
