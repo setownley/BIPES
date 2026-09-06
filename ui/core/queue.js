@@ -413,8 +413,13 @@ window.addEventListener('load', function () {
             this.appendDummyInput().appendField('Play Invaders');
             this.appendDummyInput().appendField(new Blockly.FieldImage("media/invaders.jpg", 55, 55, "*"));
             this.appendDummyInput()
-                .appendField('SDA').appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SDA')
-                .appendField('SCL').appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SCL');
+                // 5/6, not 0/0: this is the OLED's actual bus on every
+                // classroom robot (robot.py hardcodes the same pins). 0/0
+                // isn't a safe placeholder here the way it is on the ToF and
+                // gyro blocks - passing the same pin for SDA and SCL crashes
+                // the whole board (see the ValueError guard below).
+                .appendField('SDA').appendField(new Blockly.FieldNumber(5, 0, 48, 1), 'SDA')
+                .appendField('SCL').appendField(new Blockly.FieldNumber(6, 0, 48, 1), 'SCL');
             this.setPreviousStatement(true, null);
             this.setTooltip('Start the Invaders game on the OLED. Tap BOOT to reverse the cannon. This block never finishes - press RST on the board to get back to your program. Anything after it will not run.');
         }
@@ -431,6 +436,12 @@ window.addEventListener('load', function () {
 
         // Stop anything that touches I2C in the background. Each guarded
         // separately so a board with only one of them still works.
+        //
+        // The SDA == SCL guard exists because ESP-IDF's i2c_set_pin() rejects
+        // that combination at the C level, not the Python one: instead of a
+        // catchable exception it is a Guru Meditation Error that panics and
+        // reboots the whole board. Raising here trades a board crash for a
+        // message a student can actually read on reset.
         return  'try:\n' +
                 '    from gyro import gyro_stop\n' +
                 '    gyro_stop()\n' +
@@ -441,6 +452,8 @@ window.addEventListener('load', function () {
                 '    robot.os_timer(False)\n' +
                 'except Exception:\n' +
                 '    pass\n' +
+                'if ' + sda + ' == ' + scl + ':\n' +
+                '    raise ValueError("Play Invaders: SDA and SCL cannot be the same pin")\n' +
                 '_inv_i2c = I2C(0, scl=Pin(' + scl + '), sda=Pin(' + sda + '), freq=400000)\n' +
                 '_inv_oled = ssd1306.SSD1306_I2C(128, 64, _inv_i2c)\n' +
                 'invaders.run(_inv_oled, Pin(9, Pin.IN, Pin.PULL_UP), led=Pin(8, Pin.OUT))\n';
