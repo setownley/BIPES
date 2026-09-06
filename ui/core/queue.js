@@ -136,6 +136,52 @@ if (typeof xhrGET === 'function') {
                 } catch (e) {
                     classroomToolboxFailed('gyro blocks', e.message, e);
                 }
+
+                /* Games is a top-level category of its own, not nested inside
+                   CAT_SENSORS like the others - it sits at the bottom of the
+                   toolbox, below MicroPython. Anchor off the first category
+                   literally named "micropython" (the big reference-doc
+                   wrapper right above the closing tag) rather than
+                   response.documentElement: that differs in shape between the
+                   served XMLDocument and the baked file:// element, but
+                   parentNode reaches the same toolbox root either way. */
+                try {
+                    if (!doc || typeof doc.createElement !== 'function')
+                        throw new Error('no owning document for the toolbox XML');
+
+                    var micropython = null;
+                    var allCategories = response.querySelectorAll('category');
+                    for (var g = 0; g < allCategories.length; g++) {
+                        if (allCategories[g].getAttribute('name') === 'micropython') {
+                            micropython = allCategories[g];
+                            break;
+                        }
+                    }
+                    if (!micropython || !micropython.parentNode)
+                        throw new Error('no MicroPython category to anchor below');
+
+                    if (!response.querySelector('block[type="play_invaders"]')) {
+                        var gamesCategory = doc.createElement('category');
+                        gamesCategory.setAttribute('name', 'Games');
+                        gamesCategory.setAttribute('colour', '290');
+
+                        /* One block per game. Add a new game by adding its
+                           block type to this array - nothing else here
+                           needs to change. */
+                        var gameBlocks = ['play_invaders'];
+                        gameBlocks.forEach(function (t) {
+                            var b = doc.createElement('block');
+                            b.setAttribute('type', t);
+                            gamesCategory.appendChild(b);
+                        });
+                        micropython.parentNode.appendChild(gamesCategory);
+
+                        if (!response.querySelector('block[type="play_invaders"]'))
+                            throw new Error('category attached but not readable back');
+                    }
+                } catch (e) {
+                    classroomToolboxFailed('Games blocks', e.message, e);
+                }
             }
             onsuccess(response);
         }, onfail);
@@ -355,5 +401,48 @@ window.addEventListener('load', function () {
         Blockly.Python.definitions_['import_gyro'] =
             'from gyro import gyro_setup, gyro_stop, gyro_turn, gyro_reset';
         return ['gyro_turn()', Blockly.Python.ORDER_FUNCTION_CALL];
+    };
+
+    /* Games category, starting with Invaders. One block, no fields beyond the
+       I2C wiring: drop it in and the game starts, matching firmware/invaders.py.
+       No next-statement connector on purpose - invaders.run() never returns,
+       so anything placed after it would be dead code. */
+    Blockly.Blocks['play_invaders'] = {
+        init: function() {
+            this.setColour(290);
+            this.appendDummyInput().appendField('Play Invaders');
+            this.appendDummyInput().appendField(new Blockly.FieldImage("media/invaders.jpg", 55, 55, "*"));
+            this.appendDummyInput()
+                .appendField('SDA').appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SDA')
+                .appendField('SCL').appendField(new Blockly.FieldNumber(0, 0, 48, 1), 'SCL');
+            this.setPreviousStatement(true, null);
+            this.setTooltip('Start the Invaders game on the OLED. Tap BOOT to reverse the cannon. This block never finishes - press RST on the board to get back to your program. Anything after it will not run.');
+        }
+    };
+
+    Blockly.Python['play_invaders'] = function(block) {
+        var sda = block.getFieldValue('SDA') || '0';
+        var scl = block.getFieldValue('SCL') || '0';
+
+        Blockly.Python.definitions_['import_invaders'] =
+            'import invaders\n' +
+            'from machine import Pin, I2C\n' +
+            'import ssd1306';
+
+        // Stop anything that touches I2C in the background. Each guarded
+        // separately so a board with only one of them still works.
+        return  'try:\n' +
+                '    from gyro import gyro_stop\n' +
+                '    gyro_stop()\n' +
+                'except Exception:\n' +
+                '    pass\n' +
+                'try:\n' +
+                '    import robot\n' +
+                '    robot.os_timer(False)\n' +
+                'except Exception:\n' +
+                '    pass\n' +
+                '_inv_i2c = I2C(0, scl=Pin(' + scl + '), sda=Pin(' + sda + '), freq=400000)\n' +
+                '_inv_oled = ssd1306.SSD1306_I2C(128, 64, _inv_i2c)\n' +
+                'invaders.run(_inv_oled, Pin(9, Pin.IN, Pin.PULL_UP), led=Pin(8, Pin.OUT))\n';
     };
 });
