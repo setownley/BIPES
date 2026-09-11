@@ -426,28 +426,11 @@ window.addEventListener('load', function () {
         init: function() {
             this.setColour(45);
             this.appendDummyInput()
-                .appendField('distance ahead now (mm), give up after')
+                .appendField('distance (mm), give up after')
                 .appendField(new Blockly.FieldNumber(12, 1, 30, 1), 'TIMEOUT')
                 .appendField('ms');
             this.setOutput(true, 'Number');
-            this.setTooltip('Measure the distance right now. 12 ms reaches about 2 m; 6 ms about 1 m; 3 ms about 50 cm. Shorter is quicker but sees less. Returns 9999 if nothing echoes back.');
-        }
-    };
-
-    /* ---- look and measure in one ---------------------------------------- */
-    Blockly.Blocks['robot_look_measure'] = {
-        init: function() {
-            this.setColour(45);
-            this.appendDummyInput()
-                .appendField('distance to the')
-                .appendField(new Blockly.FieldDropdown([
-                    ['left', 'left'],
-                    ['ahead', 'ahead'],
-                    ['right', 'right']
-                ]), 'WHERE')
-                .appendField('(mm)');
-            this.setOutput(true, 'Number');
-            this.setTooltip('Point the sensor, wait for it to settle, then measure. This is the one to use for scanning - doing it in two steps is where readings go wrong.');
+            this.setTooltip('Measure the distance right now. 12 ms reaches about 2 m; 6 ms about 1 m; 3 ms about 50 cm. Shorter is quicker but sees less. Returns 9999 if nothing echoes back. Point the sensor first with "look" or "point sensor at" if you want a reading in a particular direction - this block only measures, it does not aim.');
         }
     };
 
@@ -474,9 +457,27 @@ window.addEventListener('load', function () {
                 Blockly.Python.ORDER_FUNCTION_CALL];
     };
 
-    Blockly.Python['robot_look_measure'] = function(block) {
+    /* ---- drive at a raw duty ----------------------------------------------
+     * forward()'s three named speeds (slow/medium/fast) are enough for most
+     * lessons; this is for students exploring what duty itself does. Goes
+     * through robot.forward_at(), which still runs through the same
+     * _motors()/soft-start path as forward() - trim and the launch-floor
+     * ramp both still apply.
+     */
+    Blockly.Blocks['robot_forward_at'] = {
+        init: function() {
+            this.setColour('#FFD400');
+            this.appendDummyInput()
+                .appendField('drive forward at')
+                .appendField(new Blockly.FieldNumber(800, 0, 1023, 1), 'DUTY');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Drive forward at a specific duty, 0 to 1023, instead of a named speed. Below about 600 the robot may not move at all - static friction needs a certain duty to overcome before the wheels turn.');
+        }
+    };
+
+    Blockly.Python['robot_forward_at'] = function(block) {
         Blockly.Python.definitions_['import_robot'] = 'import robot';
-        return ["robot.look_and_measure('" + block.getFieldValue('WHERE') + "')",
-                Blockly.Python.ORDER_FUNCTION_CALL];
+        return 'robot.forward_at(' + block.getFieldValue('DUTY') + ')\n';
     };
 });

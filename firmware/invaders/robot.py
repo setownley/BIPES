@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "0.6.1"  # v0.5.8 + hidden 10s Arcade launcher + servo/fresh ultrasonic ping
+VERSION = "0.6.2"  # v0.5.8 + hidden 10s Arcade launcher + servo/fresh ultrasonic ping + forward_at()
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -394,6 +394,27 @@ def forward(speed="medium"):
     global _cur_speed
     _cur_speed = speed
     _motors(_speed(speed), False, _speed(speed), False)
+
+def forward_at(duty):
+    """Drive forward at a specific PWM duty, 0 to 1023 (clamped), instead of
+    a named speed. Goes through the same _motors() path as forward(), so
+    per-wheel trim and the soft-start ramp in _apply() still apply.
+
+    Does NOT update _cur_speed - nudge() keeps resuming whatever NAMED
+    speed forward() last set, not a raw duty number. _speed() only knows
+    "slow"/"medium"/"fast"; feeding it a number here would silently fall
+    through to "medium" instead of honouring the duty actually asked for.
+
+    There is a launch-floor mechanism (see _apply()/_breakaway): below
+    roughly 600 on this chassis, static friction can mean the wheels do
+    not turn at all even though the PWM signal is real.
+    """
+    try:
+        d = int(duty)
+    except (TypeError, ValueError):
+        return
+    d = min(max(d, 0), 1023)
+    _motors(d, False, d, False)
 
 def backward(speed="medium"):
     _motors(_speed(speed), True, _speed(speed), True)

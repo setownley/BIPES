@@ -62,8 +62,8 @@ function checkCookie() {
   <script src="core/code.js?ver=0.2.3.1125"></script>
   <script src="core/channel.js?ver=0.2.5.0820"></script>
   <script src="core/utils.js?ver=0.2.8.0906"></script>
-  <script src="core/ui.js?ver=0.2.14.0911"></script>
-  <script src="core/queue.js?ver=0.2.14.0911"></script>
+  <script src="core/ui.js?ver=0.2.15.0911"></script>
+  <script src="core/queue.js?ver=0.2.15.0911"></script>
   <script src="core/games.js?ver=0.2.12.0906"></script>
   <script src="core/FileSaver.js"></script>
   <script src="core/shortcut.js"></script>
@@ -749,51 +749,22 @@ function eraseCookieModal(name) {
 <block type="robot_distance"></block>
 <block type="robot_on_line"></block>
 <block type="robot_side"></block>
-<block type="robot_follow"></block>
-<block type="robot_left_open"></block>
-<block type="robot_front_blocked"></block>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	  
-	  
-		
-		
-		
-		
-		
-		
-		
-		
-	  
-	  
-	  
-	
-
-
-
-<block type="robot_trim_adjust">
-  <value name="PCT"><shadow type="math_number"><field name="NUM">2</field></shadow></value>
-</block>
-<block type="robot_trim_save"></block>
 <block type="robot_servo_angle"></block>
 <block type="robot_look"></block>
 <block type="robot_servo_off"></block>
 <block type="robot_ping"></block>
-<block type="robot_look_measure"></block>
+
+<!-- Maze and calibration blocks, grouped at the bottom on purpose: they are
+     tools for a specific lesson, not everyday driving/sensing blocks. -->
+<block type="robot_follow"></block>
+<block type="robot_left_open"></block>
+<block type="robot_front_blocked"></block>
+<block type="robot_trim_adjust">
+  <value name="PCT"><shadow type="math_number"><field name="NUM">2</field></shadow></value>
+</block>
+<block type="robot_trim_save"></block>
+
+<block type="robot_forward_at"></block>
 </category>
   <category name="%{BKY_CATLOGIC}" colour="%{BKY_LOGIC_HUE}">
       <block type="controls_if"></block>
