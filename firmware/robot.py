@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "0.5.8"  # must match the block set deployed in the BIPES fork
+VERSION = "0.6.1"  # must match the block set deployed in the BIPES fork
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -28,6 +28,25 @@ PIN_A1, PIN_A2 = 3, 4     # DRV8833 AIN1 / AIN2
 PIN_B1, PIN_B2 = 7, 10    # DRV8833 BIN1 / BIN2
 PIN_LED  = 8          # onboard blue LED, inverted (0 = on)
 PIN_BTN  = 9          # BOOT button — runtime read only, never at power-on
+PIN_SERVO = 20        # SG90 signal. GPIO20 is U0RXD, so it is an input during
+                      # the ROM boot log and the servo will not twitch at reset.
+
+# Servo tuning ---------------------------------------------------------------
+SERVO_MIN_US   = 500      # pulse width at 0 degrees
+SERVO_MAX_US   = 2400     # pulse width at 180 degrees
+SERVO_FREQ     = 50       # Hz. Servos want 50; motors run at PWM_FREQ=1000.
+SERVO_SETTLE_MS = 350     # time for the horn to actually arrive and stop
+                          # swinging. Measured, not guessed: pinging before
+                          # this is up gives a reading from wherever the
+                          # sensor happened to be mid-swing, which looks like
+                          # a flaky sensor rather than a timing bug.
+
+# Where the sensor is actually pointing at each named position. Set these to
+# suit how the servo is mounted on YOUR chassis -- if left and right come out
+# swapped, swap these two numbers rather than rewiring anything.
+SERVO_LEFT   = 180
+SERVO_AHEAD  = 90
+SERVO_RIGHT  = 0
 
 # Teacher tuning knobs -------------------------------------------------------
 ECHO_TIMEOUT_US = 12000     # max range = 12000 * 100 // 582 = 2061 mm (~2.06 m)
@@ -86,6 +105,16 @@ _oled = ssd1306.SSD1306_I2C(128, 64, _i2c)
 _trig = Pin(PIN_TRIG, Pin.OUT)
 _trig.value(0)
 _echo = Pin(PIN_ECHO, Pin.IN)
+
+_servo = PWM(Pin(PIN_SERVO))
+_servo.freq(SERVO_FREQ)
+_servo_angle = None       # None = never commanded, so the first move always
+                          # waits the full settle time
+
+_ping_busy = False        # the background tick also pings. Both drive TRIG
+                          # and read ECHO, so an overlap gives one of them a
+                          # nonsense reading. This flag makes the loser skip
+                          # rather than interleave.
 
 _adc = ADC(Pin(PIN_QRE))
 _adc.atten(ADC.ATTN_11DB)   # without this, readings clip near ~1.1 V
@@ -231,8 +260,9 @@ def _repaint():
 def _tick_cb(t):
     # KEEP SHORT. No sleeps. Worst case per tick (calculated, not measured):
     # 12 ms no-echo timeout + ~25 ms OLED repaint = ~37 ms inside 100 ms.
-    global _dist_mm, _side_mm, _qre_raw, _tick
-    _dist_mm = _read_ultrasonic_mm()
+    global _dist_mm, _side_mm, _qre_raw, _tick, _ping_busy
+    if not _ping_busy:
+        _dist_mm = _read_ultrasonic_mm()
     _qre_raw = _read_qre_avg(5)
     if _tof:
         try:
@@ -398,6 +428,115 @@ def wait(seconds):
 
 def distance_mm():
     return _dist_mm if _dist_mm >= 0 else NO_ECHO_MM
+
+def servo(angle):
+    """Point the servo at an angle, 0 to 180 degrees.
+
+    Returns straight away. The horn takes about SERVO_SETTLE_MS to arrive,
+    so use look() if you are about to measure.
+    """
+    global _servo_angle
+    try:
+        a = float(angle)
+    except (TypeError, ValueError):
+        return
+    a = min(max(a, 0), 180)
+    us = SERVO_MIN_US + (SERVO_MAX_US - SERVO_MIN_US) * a / 180.0
+    # duty_u16 rather than duty(): 10-bit gives only 97 steps across the
+    # whole sweep, which is 1.9 degrees per step and visibly notchy.
+    _servo.duty_u16(int(65535 * us / (1000000.0 / SERVO_FREQ)))
+    _servo_angle = a
+
+def look(where):
+    """Point the sensor and WAIT for it to get there.
+
+    where: 'left', 'ahead', 'right', or a number of degrees.
+
+    Waits only as long as the move needs -- a 5 degree nudge does not cost
+    the same as a full sweep. Use this before measuring; use servo() if you
+    do not care when it arrives.
+    """
+    global _servo_angle
+    if where == 'left':
+        a = SERVO_LEFT
+    elif where == 'right':
+        a = SERVO_RIGHT
+    elif where == 'ahead' or where == 'centre' or where == 'center':
+        a = SERVO_AHEAD
+    else:
+        try:
+            a = min(max(float(where), 0), 180)
+        except (TypeError, ValueError):
+            return
+
+    was = _servo_angle
+    servo(a)
+    if was is None:
+        time.sleep_ms(SERVO_SETTLE_MS)
+    else:
+        # Scale the wait to how far it actually has to travel.
+        frac = abs(a - was) / 180.0
+        time.sleep_ms(int(60 + (SERVO_SETTLE_MS - 60) * frac))
+
+def servo_off():
+    """Stop driving the servo so it goes limp and quiet.
+
+    A servo holding position draws current and often buzzes. Worth doing
+    when the robot has finished scanning.
+    """
+    _servo.duty_u16(0)
+
+def ping_mm(timeout_ms=None):
+    """Measure the distance ahead RIGHT NOW, in millimetres.
+
+    distance_mm() gives the last reading the background tick took, which can
+    be up to half a second old -- fine for a dashboard, useless for deciding
+    whether to stop. This one measures when you call it.
+
+    timeout_ms: how long to wait for an echo. Leave it out for the standard
+    12 ms, which reaches about 2 metres. Shorter is faster but sees less:
+    the sound has to get there and back, so 6 ms only reaches about a metre.
+
+    Returns NO_ECHO_MM (9999) if nothing came back.
+    """
+    global _ping_busy
+
+    if timeout_ms is None:
+        t_us = ECHO_TIMEOUT_US
+    else:
+        try:
+            t_us = int(float(timeout_ms) * 1000)
+        except (TypeError, ValueError):
+            t_us = ECHO_TIMEOUT_US
+        t_us = min(max(t_us, 1000), 30000)     # 1-30 ms, ~17 cm to ~5 m
+
+    if _ping_busy:                 # the background tick has the sensor
+        return distance_mm()
+
+    _ping_busy = True
+    try:
+        _trig.value(0)
+        time.sleep_us(5)
+        _trig.value(1)
+        time.sleep_us(10)
+        _trig.value(0)
+        raw = time_pulse_us(_echo, 1, t_us)
+    finally:
+        _ping_busy = False
+
+    if raw < 0:                    # -1 / -2 mean timeout on this port
+        return NO_ECHO_MM
+    return raw * 100 // 582
+
+def look_and_measure(where, timeout_ms=None):
+    """Point the sensor, wait for it to settle, then measure. One block.
+
+    This pairing is the whole reason the servo is on the robot, and doing it
+    in two steps is where students trip up -- measuring before the horn has
+    stopped moving gives a reading from halfway through the sweep.
+    """
+    look(where)
+    return ping_mm(timeout_ms)
 
 def side_mm():
     if _side_mm < 0:
@@ -775,6 +914,7 @@ def os_timer(on):
 def shutdown():
     """Full teardown, matching the handover's verified order."""
     stop()
+    servo_off()
     _timer_stop()                   # no-op when OS_TIMER is False
     _oled.fill(0)
     _oled.show()

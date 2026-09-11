@@ -362,4 +362,121 @@ window.addEventListener('load', function () {
     /* Games category (Invaders, Snake, Defender, ...) now lives in
        games.js, split out once the embedded standalone games made this
        file's growth unbounded. See that file. */
+
+    /* Servo + fresh ultrasonic ping, alongside the other robot_* blocks.
+       All five call robot.py rather than driving the pins directly - two
+       bits of code owning the same pin is how you get the intermittent
+       timeouts and flaky readings that look like hardware faults. Needs
+       the robot.py additions (servo(), look(), servo_off(), ping_mm(),
+       look_and_measure()) - not present before firmware VERSION 0.6.1. */
+
+    /* ---- servo: angle ------------------------------------------------- */
+    Blockly.Blocks['robot_servo_angle'] = {
+        init: function() {
+            this.setColour(45);
+            this.appendDummyInput()
+                .appendField('point sensor at')
+                .appendField(new Blockly.FieldAngle(90), 'ANGLE')
+                .appendField('degrees');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Move the servo to an angle from 0 to 180. Carries on straight away - the servo takes about a third of a second to arrive, so use "look" instead if you are about to measure.');
+        }
+    };
+
+    /* ---- servo: named position, waits for arrival ----------------------
+     * Separate from the angle block on purpose. This one WAITS; that one
+     * does not. Hiding that difference behind one block is how a student
+     * ends up measuring mid-sweep and blaming the sensor.
+     */
+    Blockly.Blocks['robot_look'] = {
+        init: function() {
+            this.setColour(45);
+            this.appendDummyInput()
+                .appendField('look')
+                .appendField(new Blockly.FieldDropdown([
+                    ['left', 'left'],
+                    ['ahead', 'ahead'],
+                    ['right', 'right']
+                ]), 'WHERE')
+                .appendField('and wait');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Point the sensor and wait for it to get there. Waits only as long as the move needs. Use this before measuring.');
+        }
+    };
+
+    /* ---- servo off ------------------------------------------------------ */
+    Blockly.Blocks['robot_servo_off'] = {
+        init: function() {
+            this.setColour(45);
+            this.appendDummyInput().appendField('let servo go limp');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Stop driving the servo. It goes quiet and stops holding position. Saves power and stops the buzzing.');
+        }
+    };
+
+    /* ---- fresh ping ------------------------------------------------------
+     * Timeout in milliseconds because that is what the block asks for and
+     * what a student can reason about. The docs on the block say what range
+     * each timeout reaches, since the relationship is not obvious.
+     */
+    Blockly.Blocks['robot_ping'] = {
+        init: function() {
+            this.setColour(45);
+            this.appendDummyInput()
+                .appendField('distance ahead now (mm), give up after')
+                .appendField(new Blockly.FieldNumber(12, 1, 30, 1), 'TIMEOUT')
+                .appendField('ms');
+            this.setOutput(true, 'Number');
+            this.setTooltip('Measure the distance right now. 12 ms reaches about 2 m; 6 ms about 1 m; 3 ms about 50 cm. Shorter is quicker but sees less. Returns 9999 if nothing echoes back.');
+        }
+    };
+
+    /* ---- look and measure in one ---------------------------------------- */
+    Blockly.Blocks['robot_look_measure'] = {
+        init: function() {
+            this.setColour(45);
+            this.appendDummyInput()
+                .appendField('distance to the')
+                .appendField(new Blockly.FieldDropdown([
+                    ['left', 'left'],
+                    ['ahead', 'ahead'],
+                    ['right', 'right']
+                ]), 'WHERE')
+                .appendField('(mm)');
+            this.setOutput(true, 'Number');
+            this.setTooltip('Point the sensor, wait for it to settle, then measure. This is the one to use for scanning - doing it in two steps is where readings go wrong.');
+        }
+    };
+
+    /* ---- generators ------------------------------------------------------ */
+
+    Blockly.Python['robot_servo_angle'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        return 'robot.servo(' + block.getFieldValue('ANGLE') + ')\n';
+    };
+
+    Blockly.Python['robot_look'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        return "robot.look('" + block.getFieldValue('WHERE') + "')\n";
+    };
+
+    Blockly.Python['robot_servo_off'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        return 'robot.servo_off()\n';
+    };
+
+    Blockly.Python['robot_ping'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        return ['robot.ping_mm(' + block.getFieldValue('TIMEOUT') + ')',
+                Blockly.Python.ORDER_FUNCTION_CALL];
+    };
+
+    Blockly.Python['robot_look_measure'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        return ["robot.look_and_measure('" + block.getFieldValue('WHERE') + "')",
+                Blockly.Python.ORDER_FUNCTION_CALL];
+    };
 });

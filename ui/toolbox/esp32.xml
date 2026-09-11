@@ -62,6 +62,11 @@
   <value name="PCT"><shadow type="math_number"><field name="NUM">2</field></shadow></value>
 </block>
 <block type="robot_trim_save"></block>
+<block type="robot_servo_angle"></block>
+<block type="robot_look"></block>
+<block type="robot_servo_off"></block>
+<block type="robot_ping"></block>
+<block type="robot_look_measure"></block>
 </category>
   <category name="%{BKY_CATLOGIC}" colour="%{BKY_LOGIC_HUE}">
       <block type="controls_if"></block>
