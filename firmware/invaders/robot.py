@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "0.6.2"  # v0.5.8 + hidden 10s Arcade launcher + servo/fresh ultrasonic ping + forward_at()
+VERSION = "0.7.1"  # gyro closed-loop steering and turns + merged-back servo/ping (0.6.2)
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -58,6 +58,31 @@ LEFT_MOTOR = "A"            # which DRV8833 channel drives the LEFT wheel
 FLIP_A = False              # set True if motor A runs backwards for "forward"
 FLIP_B = True   # motor B wiring reversed on this chassis - bench-determined 2026-07-07
 TICK_MS = 100               # sensor sampling period
+
+# --- gyro closed-loop steering (Harrison method, micromouseonline.com) ----
+MMCAL_FILE = "mmcal.json"
+ZETA = 0.7          # slightly underdamped: a couple of percent overshoot
+TDS  = 0.25         # settling time. Harrison uses 0.070 sampling at 1ms;
+                    # the gyro here samples at 20ms, where 0.070 is four
+                    # samples and the discrete loop is unstable. 0.25 gives
+                    # about twelve.
+LOOP_MS  = 20       # gyro sampler period - the steering rate
+GYRO_MAX_DPS = 250.0    # MPU-6050 default full scale
+SAT_LIMIT    = 200.0    # keep spin rate below this so the gyro never clips
+MAX_DIFF = 400      # cap on the steering correction. Recomputed from the
+                    # measured plant by characterise() -- see below. The
+                    # value matters more than it looks: at full correction a
+                    # 110mm robot can spin faster than the MPU-6050's
+                    # +/-250 deg/s range, at which point the reading wraps,
+                    # the controller chases a bogus angle and the turn runs
+                    # away. A 180 degree turn overshot to 1300 degrees
+                    # before this was derived rather than guessed.
+
+_km = _tm = _dead = _kp = _kd = 0.0      # measured plant; 0 = uncalibrated
+_hold = False       # heading loop active?
+_target = 0.0       # heading being held, degrees
+_base = 0           # forward duty being steered around; 0 = spin on the spot
+_err_old = 0.0
 RAMP_MS = 200               # soft-start: motor duty ramps to target over this
 RAMP_STEPS = 10             # ... in this many steps (stop() is always instant)
 BRAKE_MS = 300              # stop(): active brake (both inputs high) before coast
@@ -374,6 +399,125 @@ def _motors(duty_a, rev_a, duty_b, rev_b):
     _ch("B", duty_b, rev_b != FLIP_B)
     _apply(target)
 
+def _motors_raw(duty_a, rev_a, duty_b, rev_b):
+    """Set duty immediately: no trim, no ramp.
+
+    The closed loop must drive the hardware directly. Trim exists to correct
+    the motor mismatch open-loop, and applying it underneath a controller
+    already correcting that same mismatch means the two fight each other.
+    The ramp would add lag the derivative term reads as noise.
+    """
+    def _raw(ch, duty, reverse):
+        a, b = (ch + "1", ch + "2")
+        if reverse:
+            a, b = b, a
+        _pwm[a].duty(int(duty))
+        _pwm[b].duty(0)
+    _raw("A", duty_a, rev_a != FLIP_A)
+    _raw("B", duty_b, rev_b != FLIP_B)
+
+
+def _steer_heading(angle):
+    """One PD step, called from the gyro sampler at 50Hz.
+
+    NOT named _steer: robot.py already has a _steer(err_mm) for wall
+    following, defined further down. Two functions of the same name means
+    the later one silently wins, and the gyro ends up calling the wall
+    follower with an angle. That cost an hour once.
+
+    Harrison's parallel form:
+        errorOld = error;
+        error = setPos - currentPos;
+        PWM   = kP * error;
+        PWM  += kD * (error - errorOld);
+
+    Runs in a timer callback, so no I2C, no sleeps, no allocation beyond
+    locals -- the sampler is due again in 20ms.
+    """
+    global _err_old
+    if not _hold:
+        return
+
+    err = _target - angle
+    diff = _kp * err + _kd * (err - _err_old) * (1000.0 / LOOP_MS)
+    _err_old = err
+
+    # Below the deadband the motors do nothing at all, so a small demand is
+    # simply ignored and the error sits there unfixed. Lift it over the
+    # threshold: this is what the intercept from the fit is for.
+    if diff > 1:
+        diff += _dead
+    elif diff < -1:
+        diff -= _dead
+
+    if diff > MAX_DIFF:
+        diff = MAX_DIFF
+    elif diff < -MAX_DIFF:
+        diff = -MAX_DIFF
+
+    if _base == 0:
+        # Spinning: SAME magnitude both wheels, opposite directions.
+        # Deriving each wheel's sign separately does not work - one comes out
+        # negative, its reverse flag reads False, and the robot drives away
+        # in a straight line instead of turning.
+        mag = int(min(abs(diff), 1023))
+        _motors_raw(mag, diff < 0, mag, diff > 0)
+    else:
+        da = _base + diff
+        db = _base - diff
+        _motors_raw(int(min(max(da, 0), 1023)), False,
+                    int(min(max(db, 0), 1023)), False)
+
+
+def _hold_on(target, base):
+    global _hold, _target, _base, _err_old
+    import gyro
+    gyro.gyro_setup()
+    gyro.gyro_reset()
+    _target = target
+    _base = base
+    _err_old = target
+    _hold = True
+    gyro.gyro_callback(_steer_heading)
+
+
+def _hold_off():
+    global _hold
+    _hold = False
+    try:
+        import gyro
+        gyro.gyro_callback(None)
+    except Exception:
+        pass
+
+
+def calibrated():
+    """True once characterise() has been run on this robot."""
+    return _km > 0 and _kp > 0
+
+
+def _load_mmcal():
+    global _km, _tm, _dead, _kp, _kd
+    try:
+        import json
+        with open(MMCAL_FILE) as f:
+            c = json.load(f)
+        _km = float(c.get("Km", 0)); _tm = float(c.get("Tm", 0))
+        _dead = float(c.get("deadband", 0))
+        _kp = float(c.get("kP", 0)); _kd = float(c.get("kD", 0))
+        if _km > 0:
+            global MAX_DIFF
+            MAX_DIFF = int(min(_dead + SAT_LIMIT / _km, 1023))
+        return True
+    except (OSError, ValueError, ImportError, TypeError):
+        return False
+
+
+# Called here rather than with the other _load_*() calls near the top: those
+# run before this function is defined, and module-level code runs in order.
+_load_mmcal()
+
+
 def _speed(name):
     return SPEEDS.get(str(name).lower(), SPEEDS["medium"])
 
@@ -391,19 +535,32 @@ def _on_line_raw():
 _cur_speed = "medium"       # last speed requested by forward() - nudge holds it
 
 def forward(speed="medium"):
+    """Drive forward, holding the heading it started on.
+
+    Same signature and same immediate return as before, so every existing
+    block and program is unchanged. The difference is that the gyro sampler
+    now steers in the background until stop() is called.
+
+    Uncalibrated, it falls back to the old open-loop behaviour rather than
+    driving with meaningless gains.
+    """
     global _cur_speed
     _cur_speed = speed
-    _motors(_speed(speed), False, _speed(speed), False)
+    d = _speed(speed)
+    if not calibrated():
+        _motors(d, False, d, False)
+        return
+    _hold_on(0.0, d)
 
 def forward_at(duty):
     """Drive forward at a specific PWM duty, 0 to 1023 (clamped), instead of
-    a named speed. Goes through the same _motors() path as forward(), so
-    per-wheel trim and the soft-start ramp in _apply() still apply.
+    a named speed. Goes through the same _motors() path as forward() did
+    before closed-loop steering, so per-wheel trim and the soft-start ramp
+    in _apply() still apply.
 
-    Does NOT update _cur_speed - nudge() keeps resuming whatever NAMED
-    speed forward() last set, not a raw duty number. _speed() only knows
-    "slow"/"medium"/"fast"; feeding it a number here would silently fall
-    through to "medium" instead of honouring the duty actually asked for.
+    Deliberately open-loop, unlike forward(): does not engage _hold_on(),
+    so it does not touch _cur_speed or the heading-hold state. nudge() keeps
+    resuming whatever NAMED speed forward() last set, not a raw duty number.
 
     There is a launch-floor mechanism (see _apply()/_breakaway): below
     roughly 600 on this chassis, static friction can mean the wheels do
@@ -417,6 +574,12 @@ def forward_at(duty):
     _motors(d, False, d, False)
 
 def backward(speed="medium"):
+    """Open loop, deliberately.
+
+    Reversing under gyro control needs the correction sign flipped, and that
+    is a different enough behaviour to want its own testing. Left as it was
+    rather than changed untested.
+    """
     _motors(_speed(speed), True, _speed(speed), True)
 
 def turn(direction="left"):
@@ -432,6 +595,9 @@ def turn(direction="left"):
         _motors(d, right_rev, d, left_rev)
 
 def stop():
+    # Release the heading loop BEFORE braking. Left running, it would see the
+    # robot stop, read a growing error and fight the brake.
+    _hold_off()
     # v0.3.2: brake first (DRV8833 HIGH/HIGH = windings shorted, symmetric,
     # hard stop - kills the asymmetric coast yaw), then release to coast.
     # Applied INSTANTLY - no ramp on the safety path.
@@ -897,37 +1063,59 @@ def _set_forward(duty_a, duty_b):
     _pwm[a[0]].duty(int(duty_a * _trim["A"])); _pwm[a[1]].duty(0)
     _pwm[b[0]].duty(int(duty_b * _trim["B"])); _pwm[b[1]].duty(0)
 
-def turn_degrees(direction="left", degrees=90):
-    """Spin a chosen angle by scaling this robot's calibrated t90.
+TURN_TOL_DEG    = 2.0       # close enough
+TURN_HOLD_MS    = 100       # must stay inside tolerance this long
+TURN_TIMEOUT_MS = 5000
 
-    HONEST LIMITS (open-loop, no gyro):
-      - accurate roughly 20-180 deg; linear scaling of a single measured point
-      - BELOW ~15 deg the launch ramp dominates and it will under-rotate
-      - large angles accumulate error; 450 deg is the hard cap
-      - battery level and floor surface shift the result
+
+def turn_degrees(direction="left", degrees=90):
+    """Spin a chosen angle, measured by the gyro.
+
+    Signature unchanged, so every existing block still works.
+
+    This replaces a scheme that scaled a single timed measurement, whose own
+    docstring listed the damage: below about 15 degrees the launch ramp
+    dominated and it under-rotated, large angles accumulated error, and
+    battery level and floor surface both shifted the result.
+
+    A closed loop on measured angle has none of those. It stops when the
+    gyro says it has turned far enough, whatever the battery is doing.
     """
     try:
         d = float(degrees)
     except (TypeError, ValueError):
-        d = 0
-    d = min(max(d, 0), 450)                 # clamp per the block's range
+        return
+    d = min(max(d, 0), 450)
     if d == 0:
         return
-    t90 = None
-    try:
-        import json
-        with open(MAZE_CAL_FILE) as f:
-            t90 = json.load(f).get("t90_" + str(direction).lower())
-    except (OSError, ValueError, ImportError):
-        pass
-    if t90 is None:
-        print("robot: t90 not calibrated - run bench turn section")
+
+    if not calibrated():
+        print("robot: not characterised - run the motor calibration block")
         return
-    t = t90 * d / 90.0
+
+    import gyro
+    # Gyro yaw is positive to the right, so a left turn is a negative target.
+    target = -d if str(direction).lower() == "left" else d
+
     stop()
-    turn(direction)
-    time.sleep(t)
+    _hold_on(target, 0)
+
+    t0 = time.ticks_ms()
+    settled = None
+    while time.ticks_diff(time.ticks_ms(), t0) < TURN_TIMEOUT_MS:
+        err = target - gyro.gyro_turn()
+        if abs(err) <= TURN_TOL_DEG:
+            if settled is None:
+                settled = time.ticks_ms()
+            elif time.ticks_diff(time.ticks_ms(), settled) >= TURN_HOLD_MS:
+                break
+        else:
+            settled = None
+        time.sleep_ms(10)
+
     stop()
+    return target - gyro.gyro_turn()
+
 
 def turn90(direction="left"):
     """90-degree spin (kept as its own call; now a thin wrapper)."""
@@ -979,6 +1167,152 @@ def os_timer(on):
         _timer_start()
     else:
         _timer_stop()
+
+# Harrison: the sweep values "are likely to be small values like 5-20%".
+# There is a hard reason to obey that here: the MPU-6050 defaults to a
+# +/-250 deg/s range, and a 110mm robot spinning much above half throttle
+# exceeds it. The readings then CLIP, and a straight-line fit through
+# clipped data returns a NEGATIVE gain -- which is exactly what a first
+# attempt at 250-750 produced. The saturation guard below is the backstop.
+SWEEP        = (200, 260, 320, 380, 440, 500)
+SPIN_MS      = 900
+SETTLE_MS    = 400
+
+
+def characterise(verbose=True):
+    """Measure this robot's Km, Tm and deadband; derive and save the gains.
+
+    Peter Harrison's method (micromouseonline.com, "Characterising the drive
+    system on the micromouse"): spin on the spot at several duty levels, let
+    each reach a steady angular velocity, and fit a straight line to rate
+    against duty. The slope is the DC gain Km. The line does not pass through
+    the origin, and that intercept is the drive-system loss -- the deadband,
+    for free, with no separate breakaway hunt.
+
+    Tm comes from the 63% point of the step response, since 1-exp(-1)=0.632.
+
+    Spinning on the spot means both wheels roll, so the load is a rolling
+    one rather than the scrubbing of dragging a stopped wheel sideways, and
+    it needs no room to travel. Run once per robot.
+    """
+    import gyro
+    _hold_off()
+    gyro.gyro_setup()
+    time.sleep_ms(800)
+
+    pts, tms = [], []
+    for duty in SWEEP:
+        gyro.gyro_reset()
+        last = 0.0
+        rates = []
+        t0 = time.ticks_ms()
+        try:
+            _motors_raw(duty, False, duty, True)     # A forward, B reverse
+            while time.ticks_diff(time.ticks_ms(), t0) < SPIN_MS:
+                time.sleep_ms(LOOP_MS)
+                tt = time.ticks_diff(time.ticks_ms(), t0)
+                a = gyro.gyro_turn()
+                rates.append((tt, abs(a - last) * (1000.0 / LOOP_MS)))
+                last = a
+        finally:
+            stop()
+        time.sleep_ms(SETTLE_MS)
+
+        if len(rates) < 6:
+            continue
+        tail = rates[len(rates) * 2 // 3:]
+        ss = sum(r for _, r in tail) / len(tail)
+        tm = None
+        for tt, r in rates:
+            if r >= 0.632 * ss:
+                tm = tt / 1000.0
+                break
+        if verbose:
+            print("  duty %4d -> %7.1f deg/s  Tm %s"
+                  % (duty, ss, ("%.3f" % tm) if tm else "-"))
+
+        # Past the sensor's range the readings clip and the fit is nonsense.
+        # Stop here and use what we have rather than adding bad points.
+        if ss >= SAT_LIMIT:
+            if verbose:
+                print("  (near the gyro's %d deg/s limit - sweep stops here)"
+                      % int(GYRO_MAX_DPS))
+            if ss > 5.0:
+                pts.append((duty, ss))
+                if tm:
+                    tms.append(tm)
+            break
+
+        # A point that did not move tells the fit nothing except that it was
+        # under the deadband, and including it drags the line down.
+        if ss > 5.0:
+            pts.append((duty, ss))
+            if tm:
+                tms.append(tm)
+
+    if len(pts) < 2 or not tms:
+        print("  not enough movement - is the robot on the floor?")
+        return None
+
+    n = len(pts)
+    sx = sum(p[0] for p in pts); sy = sum(p[1] for p in pts)
+    sxy = sum(p[0] * p[1] for p in pts); sxx = sum(p[0] * p[0] for p in pts)
+    den = n * sxx - sx * sx
+    if den == 0:
+        return None
+    km = (n * sxy - sx * sy) / den
+    if km <= 0:
+        # More duty must give more yaw. A negative slope means the data is
+        # wrong, not the robot -- almost always gyro clipping.
+        print("  fit gave a negative gain - readings are clipping.")
+        print("  Lower the SWEEP values and run again.")
+        return None
+    dead = -((sy - km * sx) / n) / km
+    tm = sum(tms) / len(tms)
+
+    # Gains from the measured plant, not guessed. Plant Km/(s(1+Tm.s)) under
+    # PD gives s^2 + ((1+Km.Kd)/Tm).s + Km.Kp/Tm = 0; matching that to
+    # s^2 + 2.zeta.wn.s + wn^2 with wn = 4/(zeta.tds) gives the two below.
+    # These reproduce Harrison's published worked example (Km=142, Tm=0.165
+    # -> kP 7.8, kD 0.126) to three figures.
+    wn = 4.0 / (ZETA * TDS)
+    kp = wn * wn * tm / km
+    kd = (2 * ZETA * wn * tm - 1) / km
+    if kd < 0:
+        kd = 0.0
+
+    global _km, _tm, _dead, _kp, _kd, MAX_DIFF
+    _km, _tm, _dead, _kp, _kd = km, tm, dead, kp, kd
+
+    # Cap the correction at the duty that spins us at SAT_LIMIT, so the gyro
+    # never clips while the controller is relying on it.
+    MAX_DIFF = int(min(dead + SAT_LIMIT / km, 1023))
+
+    try:
+        import json
+        with open(MMCAL_FILE, "w") as f:
+            json.dump({"Km": km, "Tm": tm, "deadband": dead,
+                       "kP": kp, "kD": kd}, f)
+    except Exception as e:
+        print("  could not save:", e)
+
+    print("  Km %.3f  Tm %.3f  deadband %.0f  kP %.2f  kD %.4f"
+          % (km, tm, dead, kp, kd))
+
+    # The robot is on the floor and unplugged when this runs, so the console
+    # is unreadable. The display is the only output that exists.
+    try:
+        _oled.fill(0)
+        _oled.text("CAL DONE", OLED_X0, OLED_Y0)
+        _oled.text("Km %.2f" % km, OLED_X0, OLED_Y0 + 8)
+        _oled.text("Tm %.2f" % tm, OLED_X0, OLED_Y0 + 16)
+        _oled.text("dz %d" % int(dead), OLED_X0, OLED_Y0 + 24)
+        _oled.show()
+    except Exception:
+        pass
+
+    return (km, tm, dead, kp, kd)
+
 
 def shutdown():
     """Full teardown, matching the handover's verified order."""

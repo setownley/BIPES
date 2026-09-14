@@ -1224,4 +1224,33 @@ window.addEventListener('load', function () {
 
         return "_mmcal('" + action + "', " + deg + ", " + duty + ", " + secs + ")\n";
     };
+
+    /* Calibrate motors -- one block, one button. Calls robot.characterise(),
+       which measures this robot's motor gain, time constant and deadband by
+       spinning on the spot, then derives the steering and turn gains from
+       them. Needs robot.py 0.7.0+ and gyro.py on the board.
+
+       Run once per robot. After that the ordinary forward and turn blocks
+       use the result automatically - it is saved on the board and robot.py
+       loads it at import. Then take this block back out of the program.
+
+       Shows Km, Tm and the deadband on the OLED when it finishes, because
+       the robot is on the floor and unplugged at that moment and the
+       console is not readable. */
+    Blockly.Blocks['robot_calibrate'] = {
+        init: function() {
+            this.setColour(20);
+            this.appendDummyInput().appendField('Calibrate motors');
+            this.appendDummyInput()
+                .appendField(new Blockly.FieldImage("media/calibrate.jpg", 55, 55, "*"));
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Run this once on each robot, on the floor, with a little space around it. It spins on the spot for about ten seconds and works out how this robot’s motors behave, then shows the numbers on the screen. After that, forward and turn blocks steer straight and turn accurately by themselves. Remove this block afterwards.');
+        }
+    };
+
+    Blockly.Python['robot_calibrate'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        return 'robot.characterise()\n';
+    };
 });

@@ -98,6 +98,7 @@ class Gyro:
         self._last = time.ticks_us()
         self._skipped = 0
         self._timer = None
+        self._cb = None            # robot.py hangs its steering step here
 
         self.calibrate()
         self.start()
@@ -153,6 +154,15 @@ class Gyro:
             # beyond a second is absurd and better dropped.
             if 0 < dt < 1.0:
                 self.angle += (rate - self._bias) * dt
+
+            # Steering runs here rather than in robot.py's OS tick. That tick
+            # is 100ms and its budget is already "12ms no-echo timeout +
+            # ~25ms OLED repaint" -- the repaint alone is longer than the
+            # 20ms a heading loop needs, so it cannot simply be sped up.
+            # This sampler is already at 50Hz and already holds the angle,
+            # and the steering step is arithmetic plus two PWM writes.
+            if self._cb is not None:
+                self._cb(self.angle)
         except Exception:
             # A bus glitch must not kill the timer. Losing one sample is
             # recoverable; losing the sampler is not.
@@ -179,6 +189,14 @@ class Gyro:
         # and a student watching -8.000000 scroll past learns nothing from
         # the extra six digits.
         return round(self.angle, 1)
+
+    def set_callback(self, fn):
+        """Called with the current angle after every sample, or None.
+
+        Runs inside the timer callback, so it must not touch I2C, sleep, or
+        do anything slow: the next sample is due in 20ms.
+        """
+        self._cb = fn
 
     def reset(self):
         self.angle = 0.0
@@ -231,6 +249,13 @@ def gyro_reset():
         gyro_setup()
     else:
         _gyro.reset()
+
+
+def gyro_callback(fn):
+    """Register a function to run after every gyro sample. None to clear."""
+    if _gyro is None:
+        gyro_setup()
+    _gyro.set_callback(fn)
 
 
 def gyro_bus():
