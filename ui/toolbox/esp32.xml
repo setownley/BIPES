@@ -36,6 +36,7 @@
   <value name="PCT"><shadow type="math_number"><field name="NUM">2</field></shadow></value>
 </block>
 <block type="robot_trim_save"></block>
+<block type="gyro_calibrate"></block>
 
 <block type="robot_forward_at"></block>
 </category>
