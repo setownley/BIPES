@@ -419,7 +419,7 @@ class Tool {
  * one-line change here plus a matching entry in bake_offline.py's PYLIBS
  * list (offline copies) - nothing else in the picker needs to change.
  */
-const PYLIB_FILES = ['gyro.py', 'vl53l0x_nb.py', 'ssd1306.py', 'invaders.py', 'snake.py', 'defender.py'];
+const PYLIB_FILES = ['gyro.py', 'vl53l0x_nb.py', 'ssd1306.py', 'invaders.py', 'snake.py', 'defender.py', 'mmcal.py'];
 
 /**
  * Handle the Files tab.

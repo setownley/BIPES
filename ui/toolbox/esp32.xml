@@ -37,6 +37,7 @@
 </block>
 <block type="robot_trim_save"></block>
 <block type="gyro_calibrate"></block>
+<block type="mmcal"></block>
 
 <block type="robot_forward_at"></block>
 </category>
