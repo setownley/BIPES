@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "1.2.59"  # supply-safe grout recovery with staggered rejoin
+VERSION = "1.2.60"  # full-range wheel breakaway calibration
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -110,7 +110,7 @@ DRIVE_RECOVERY_ENTER_DEG = 8.0
 DRIVE_RECOVERY_EXIT_DEG = 4.0
                             # hysteresis prevents rapid grip-pulse chatter
 DRIVE_RECOVERY_DUTY = 450   # proven one-wheel launch; 550 browned out in repeats
-CAL_POWER_MAX = 300        # opposite-wheel turn load reset above safe 300 ceiling
+CAL_POWER_MAX = POWER_SAFE_MAX  # calibration may probe the full hardware-safe range
 TURN_POWER_MAX = 300       # faster cruise while retaining useful gyro samples
 TURN_LAUNCH_DUTY = 450     # sequential one-wheel kick climbed out of tile grout
 TURN_LAUNCH_MS = 120       # 60 ms per wheel before both settle at the 300 cap
@@ -1676,7 +1676,7 @@ def shutdown():
 CAL_LOG    = "cal_log.txt"
 CAL_STATE_FILE = "mmcal_work.json"
 CAL_STATE_VERSION = 2
-BREAKAWAY_PROBES = (120, 180, 240, 300)
+BREAKAWAY_PROBES = (120, 180, 240, 300, 360, 420, 480, 540, POWER_SAFE_MAX)
 CAL_HEALTH_DUTY = 300
 CAL_HEALTH_RATE_MIN = 15.0
 PROBE_MS   = 300

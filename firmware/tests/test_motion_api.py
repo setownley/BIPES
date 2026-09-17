@@ -187,7 +187,8 @@ check("BIPES named speeds are distinct and power-safe",
       and robot.SPEEDS["fast"] <= robot.POWER_SAFE_MAX,
       repr(robot.SPEEDS))
 check("every fresh-calibration breakaway probe is power-safe",
-      max(robot.BREAKAWAY_PROBES) <= robot.CAL_POWER_MAX,
+      robot.CAL_POWER_MAX == robot.POWER_SAFE_MAX
+      and max(robot.BREAKAWAY_PROBES) == robot.POWER_SAFE_MAX,
       repr(robot.BREAKAWAY_PROBES))
 saved_breakaway = robot.get_breakaway()
 check("manual breakaway values are clamped to safe power",
