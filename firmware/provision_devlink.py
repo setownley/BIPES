@@ -159,6 +159,17 @@ def esp_ports() -> list[str]:
     )
 
 
+def other_serial_ports() -> list[str]:
+    """Describe non-Espressif ports so a power-only cable is obvious."""
+    from serial.tools import list_ports
+
+    return [
+        "%s (%s)" % (port.device, port.description)
+        for port in list_ports.comports()
+        if port.vid != ESPRESSIF_VID
+    ]
+
+
 def select_port(requested: str | None) -> str:
     if requested:
         available = {port.upper(): port for port in esp_ports()}
@@ -171,9 +182,12 @@ def select_port(requested: str | None) -> str:
 
     ports = esp_ports()
     if len(ports) != 1:
+        others = other_serial_ports()
+        detail = "; other serial ports: %s" % ", ".join(others) if others else ""
         raise ProvisionError(
-            "plug in exactly one Espressif USB device (found: %s)"
-            % (", ".join(ports) or "none")
+            "plug in exactly one Espressif USB device with a data-capable "
+            "cable (found: %s%s)"
+            % (", ".join(ports) or "none", detail)
         )
     return ports[0]
 

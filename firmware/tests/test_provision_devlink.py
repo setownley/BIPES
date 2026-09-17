@@ -53,6 +53,23 @@ for target, item in manifest["files"].items():
 args = provision.parse_args(["--port", "COM9", "--once"])
 assert args.port == "COM9" and args.once and not args.check_only
 
+original_esp_ports = provision.esp_ports
+original_other_ports = provision.other_serial_ports
+try:
+    provision.esp_ports = lambda: []
+    provision.other_serial_ports = lambda: [
+        "COM7 (Standard Serial over Bluetooth link)"
+    ]
+    try:
+        provision.select_port(None)
+        raise AssertionError("missing wired board was accepted")
+    except provision.ProvisionError as exc:
+        assert "data-capable cable" in str(exc)
+        assert "Bluetooth" in str(exc)
+finally:
+    provision.esp_ports = original_esp_ports
+    provision.other_serial_ports = original_other_ports
+
 
 # Exact hash equality is the completion gate, not a filename-only check.
 original_info = provision.board_file_info
