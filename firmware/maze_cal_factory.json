@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "purpose": "factory defaults only; per-robot motion calibration is intentionally absent",
+  "geometry": {
+    "sensor_to_rear_axle_mm": 120.0,
+    "diag_mm": 233,
+    "width_mm": 160.0,
+    "length_mm": 170.0,
+    "side_sensor_height_mm": 20.0
+  },
+  "side_offset_mean": 6,
+  "side_curve": [
+    [50, 44, 41, 49, 0],
+    [100, 103, 98, 109, 0],
+    [150, 154, 151, 157, 0],
+    [200, 204, 201, 210, 0],
+    [300, 313, 310, 317, 0],
+    [500, 519, 514, 526, 0]
+  ]
+}
