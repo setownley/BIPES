@@ -42,8 +42,9 @@ assert "robot.stop()" in gyro_block
 cal_start = source.index("Blockly.Python['robot_calibrate']")
 cal_end = source.index("});", cal_start)
 cal_generator = source[cal_start:cal_end]
-assert "Use Save blocks to robot" in cal_generator
-assert "do not use Run" in cal_generator
+assert "time.sleep(1)" in cal_generator
+assert "robot.characterise()" in cal_generator
+assert "print('CALIBRATION', _calibration)" in cal_generator
 
 utils_source = (root / "ui" / "core" / "utils.js").read_text(encoding="utf-8")
 assert "robot_calibration_main ()" in utils_source
