@@ -170,6 +170,17 @@ def other_serial_ports() -> list[str]:
     ]
 
 
+def legacy_find_port():
+    """Call the original provisioner's detector, without running its UI."""
+    path = SCRIPT_DIR / "provision.py"
+    spec = importlib.util.spec_from_file_location("legacy_robot_provision", path)
+    if spec is None or spec.loader is None:
+        raise ProvisionError("could not load original provisioner: " + str(path))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.find_port()
+
+
 def select_port(requested: str | None) -> str:
     if requested:
         available = {port.upper(): port for port in esp_ports()}
@@ -180,20 +191,20 @@ def select_port(requested: str | None) -> str:
             )
         return available[requested.upper()]
 
+    # Use the original provisioner's detector verbatim.  This is kept as a
+    # direct call to provision.py so the two installers cannot drift apart.
+    legacy_port = legacy_find_port()
+    if legacy_port:
+        return legacy_port
+
     ports = esp_ports()
     if not ports:
-        # Some Windows/native-USB combinations briefly expose no VID/PID to
-        # pyserial even though esptool or mpremote can connect.  The legacy
-        # provisioner relies on those tools after selecting a port, so let
-        # their own safe MicroPython/ROM handshake be the fallback detector.
         others = other_serial_ports()
-        print(
-            "No VID 303A port is visible; trying esptool/mpremote automatic "
-            "USB detection."
+        detail = "; other serial ports: %s" % ", ".join(others) if others else ""
+        raise ProvisionError(
+            "the original provisioner also found no Espressif USB device%s"
+            % detail
         )
-        if others:
-            print("  Ignoring non-ESP serial ports:", ", ".join(others))
-        return "auto"
     if len(ports) != 1:
         others = other_serial_ports()
         detail = "; other serial ports: %s" % ", ".join(others) if others else ""
@@ -220,23 +231,7 @@ def mpremote(port: str, *arguments: str, timeout: float = 60):
 def wait_for_port(port: str, timeout: float = 20):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if port == "auto":
-            result = run(
-                [
-                    sys.executable,
-                    "-m",
-                    "mpremote",
-                    "connect",
-                    "auto",
-                    "exec",
-                    "print('PROVISION_USB_READY')",
-                ],
-                timeout=8,
-                allow_failure=True,
-            )
-            if result.returncode == 0 and "PROVISION_USB_READY" in result.stdout:
-                return
-        elif port.upper() in {item.upper() for item in esp_ports()}:
+        if port.upper() in {item.upper() for item in esp_ports()}:
             return
         time.sleep(0.25)
     raise ProvisionError("board did not return over USB after flashing")
@@ -377,7 +372,7 @@ def reset_into_devlink(port: str):
 
 def provision(port: str, manifest: dict):
     print("[1/7] erasing flash...")
-    esptool_port = [] if port == "auto" else ["--port", port]
+    esptool_port = ["--port", port]
     run(
         [
             sys.executable,

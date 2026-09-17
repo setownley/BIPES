@@ -55,15 +55,25 @@ assert args.port == "COM9" and args.once and not args.check_only
 
 original_esp_ports = provision.esp_ports
 original_other_ports = provision.other_serial_ports
+original_legacy_find_port = provision.legacy_find_port
 try:
     provision.esp_ports = lambda: []
     provision.other_serial_ports = lambda: [
         "COM7 (Standard Serial over Bluetooth link)"
     ]
-    assert provision.select_port(None) == "auto"
+    provision.legacy_find_port = lambda: "COM42"
+    assert provision.select_port(None) == "COM42"
+    provision.legacy_find_port = lambda: None
+    try:
+        provision.select_port(None)
+        raise AssertionError("missing wired board was accepted")
+    except provision.ProvisionError as exc:
+        assert "original provisioner also found no" in str(exc)
+        assert "Bluetooth" in str(exc)
 finally:
     provision.esp_ports = original_esp_ports
     provision.other_serial_ports = original_other_ports
+    provision.legacy_find_port = original_legacy_find_port
 
 
 # Exact hash equality is the completion gate, not a filename-only check.
