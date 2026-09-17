@@ -47,11 +47,33 @@ import time
 
 from machine import I2C, Pin, Timer
 
+# Bump this whenever this file changes. robot.py logs it to cal_log.txt, so
+# every run records which gyro driver produced the numbers. Without it there
+# is no way to tell from the board whether a new file actually landed.
+VERSION = "1.2.2"      # recognise the MPU-6515 identity fitted to this PCB
+
 _PWR_MGMT_1 = 0x6B
+_GYRO_CONFIG = 0x1B
 _GYRO_ZOUT_H = 0x47      # gyro Z high byte -- the only axis we need
 _WHO_AM_I = 0x75
 
-_GYRO_SCALE = 131.0      # LSB per deg/s at the default +/-250 deg/s range
+# Full-scale range. The chip defaults to +/-250 deg/s, which sounds ample
+# until a 110mm robot spins on the spot: one of these hits 250 deg/s at
+# about a quarter throttle, and above that the reading simply pins at the
+# limit. Calibration then has a usable window about 40 duty counts wide and
+# cannot fit a line through it, and fast turns read short.
+#
+# FS_SEL goes in bits 4:3 of GYRO_CONFIG. +/-1000 keeps 32.8 counts per
+# deg/s, which is still ~0.03 deg/s of resolution -- far finer than the
+# noise floor -- while giving four times the headroom.
+_FS_SEL   = 2            # 0=250, 1=500, 2=1000, 3=2000 deg/s
+_FS_RANGE = (250.0, 500.0, 1000.0, 2000.0)[_FS_SEL]
+_GYRO_SCALE = (131.0, 65.5, 32.8, 16.4)[_FS_SEL]   # LSB per deg/s
+
+
+def full_scale():
+    """Measurable range in deg/s. robot.py sizes its limits from this."""
+    return _FS_RANGE
 _SAMPLE_MS = 20          # 50Hz. Fast enough for a 90 degree turn, light
                          # enough to leave the bus mostly free.
 
@@ -92,12 +114,17 @@ class Gyro:
         # which looks exactly like a wiring fault.
         self.i2c.writeto_mem(addr, _PWR_MGMT_1, b'\x00')
         time.sleep_ms(100)
+        # Set the full-scale range before anything is read, or the first
+        # samples are scaled wrongly.
+        self.i2c.writeto_mem(addr, _GYRO_CONFIG, bytes([_FS_SEL << 3]))
+        time.sleep_ms(20)
 
         self.angle = 0.0
         self._bias = 0.0
         self._last = time.ticks_us()
         self._skipped = 0
         self._timer = None
+        self._cb = None            # robot.py hangs its steering step here
 
         self.calibrate()
         self.start()
@@ -153,6 +180,15 @@ class Gyro:
             # beyond a second is absurd and better dropped.
             if 0 < dt < 1.0:
                 self.angle += (rate - self._bias) * dt
+
+            # Steering runs here rather than in robot.py's OS tick. That tick
+            # is 100ms and its budget is already "12ms no-echo timeout +
+            # ~25ms OLED repaint" -- the repaint alone is longer than the
+            # 20ms a heading loop needs, so it cannot simply be sped up.
+            # This sampler is already at 50Hz and already holds the angle,
+            # and the steering step is arithmetic plus two PWM writes.
+            if self._cb is not None:
+                self._cb(self.angle)
         except Exception:
             # A bus glitch must not kill the timer. Losing one sample is
             # recoverable; losing the sampler is not.
@@ -180,6 +216,14 @@ class Gyro:
         # the extra six digits.
         return round(self.angle, 1)
 
+    def set_callback(self, fn):
+        """Called with the current angle after every sample, or None.
+
+        Runs inside the timer callback, so it must not touch I2C, sleep, or
+        do anything slow: the next sample is due in 20ms.
+        """
+        self._cb = fn
+
     def reset(self):
         self.angle = 0.0
         self._last = time.ticks_us()
@@ -188,7 +232,9 @@ class Gyro:
         try:
             with self.lock:
                 who = self.i2c.readfrom_mem(self.addr, _WHO_AM_I, 1)[0]
-            return who in (0x68, 0x70, 0x72)
+            # 0x74 is MPU-6515. It uses this MPU6xxx register layout and is
+            # the device measured on the classroom PCB at address 0x68.
+            return who in (0x68, 0x70, 0x72, 0x74)
         except Exception:
             return False
 
@@ -196,7 +242,7 @@ class Gyro:
 _gyro = None
 
 
-def gyro_setup(sda=5, scl=6, addr=0x68, bus=0):
+def gyro_setup(sda=5, scl=6, addr=0x68, bus=0, i2c=None):
     """Wake the gyro, calibrate it, and start sampling in the background.
 
     bus is the I2C peripheral number. It has to be a parameter rather than
@@ -206,7 +252,13 @@ def gyro_setup(sda=5, scl=6, addr=0x68, bus=0):
     global _gyro
     if _gyro is not None:
         _gyro.stop()
-    i2c = I2C(bus, sda=Pin(sda), scl=Pin(scl))
+    # Prefer a bus handed in by the caller. robot.py already owns an I2C on
+    # these pins for the OLED and the ToF; constructing a second I2C object
+    # for the same peripheral re-initialises hardware another driver is
+    # using, and on a real board that is a good way to throw where a
+    # simulation happily carries on.
+    if i2c is None:
+        i2c = I2C(bus, sda=Pin(sda), scl=Pin(scl))
     _gyro = Gyro(i2c, addr)
     return _gyro
 
@@ -231,6 +283,15 @@ def gyro_reset():
         gyro_setup()
     else:
         _gyro.reset()
+
+
+def gyro_callback(fn):
+    """Register a function to run after every gyro sample. None to clear."""
+    if _gyro is None:
+        if fn is None:
+            return
+        gyro_setup()
+    _gyro.set_callback(fn)
 
 
 def gyro_bus():

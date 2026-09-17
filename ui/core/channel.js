@@ -532,6 +532,22 @@ class webbluetooth {
     this.connected = false;
     this.completeBufferCallback = [];
     this.last4chars = '';
+    this.devLink = false;
+    this.devLinkLineBuffer = '';
+    this.devLinkWaiters = [];
+    this.devLinkTerminalWaiters = [];
+    this.devLinkLastResult = undefined;
+    this.devLinkCommandTimeoutMs = 10000;
+    this.devLinkUploadRetryDelayMs = 150;
+    this.devLinkRunTimeoutMs = 180000;
+    this.devLinkRecoveryDelayMs = 250;
+    this.devLinkMotorSafeDelayMs = 10000;
+    this.devLinkCalibrationSafeDelayMs = 180000;
+    this.devLinkHeartbeat = undefined;
+    this.devLinkHeartbeatPending = false;
+    this.devLinkBusyCount = 0;
+    this.encoder = new TextEncoder();
+    this.decoder = new TextDecoder();
   }
 
   static get ServiceUUID () {return '6e400001-b5a3-f393-e0a9-e50e24dcca9e';}
@@ -594,6 +610,269 @@ class webbluetooth {
     });
   }
 
+  devLinkHeartbeatTick() {
+    if (!this.connected || !this.devLink || this.devLinkBusyCount
+        || this.devLinkHeartbeatPending || this.devLinkWaiters.length
+        || this.devLinkTerminalWaiters.length) return;
+    this.devLinkHeartbeatPending = true;
+    this.devLinkWrite({op: 'status'}, 'status', 5000)
+      .catch(error => UI ['notify'].log('Robot heartbeat: ' + error.message))
+      .finally(() => {this.devLinkHeartbeatPending = false;});
+  }
+
+  devLinkWrite(message, expectedType='ack', timeoutMs=this.devLinkCommandTimeoutMs) {
+    const operation = message.op;
+    return new Promise((resolve, reject) => {
+      const waiter = {operation: operation, type: expectedType,
+                      resolve: resolve, reject: reject, timer: undefined};
+      waiter.timer = setTimeout(() => {
+        this.devLinkWaiters = this.devLinkWaiters.filter(w => w !== waiter);
+        reject(new Error('Bluetooth robot did not answer ' + operation));
+      }, timeoutMs);
+      this.devLinkWaiters.push(waiter);
+      const bytes = this.encoder.encode(JSON.stringify(message));
+      const write = this.rxCharacteristic.writeValueWithResponse
+        ? this.rxCharacteristic.writeValueWithResponse(bytes)
+        : this.rxCharacteristic.writeValue(bytes);
+      write.catch(error => {
+        clearTimeout(waiter.timer);
+        this.devLinkWaiters = this.devLinkWaiters.filter(w => w !== waiter);
+        reject(error);
+      });
+    });
+  }
+
+  devLinkBase64(bytes) {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+
+  async devLinkUpload(source) {
+    const raw = this.encoder.encode(source);
+    const digest = await crypto.subtle.digest('SHA-256', raw);
+    const sha = Array.from(new Uint8Array(digest))
+      .map(value => value.toString(16).padStart(2, '0')).join('');
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        // Restarting with begin also works with an older board supervisor if
+        // the bytes landed but a chunk ACK did not.
+        await this.devLinkWrite({op: 'begin', size: raw.length, sha: sha});
+        const chunkSize = 120;  // safely below the board's 512-byte command buffer
+        let sequence = 0;
+        for (let offset = 0; offset < raw.length; offset += chunkSize) {
+          const data = this.devLinkBase64(raw.slice(offset, offset + chunkSize));
+          await this.devLinkWrite({op: 'chunk', n: sequence++, d: data});
+          if (UI && UI['progress']) UI['progress'].remain(raw.length - offset);
+        }
+        await this.devLinkWrite({op: 'commit'});
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt < 2) await this.delayPromise(this.devLinkUploadRetryDelayMs);
+      }
+    }
+    throw lastError || new Error('Bluetooth upload failed');
+  }
+
+  async devLinkSetInput(value) {
+    const raw = this.encoder.encode(JSON.stringify(value));
+    if (raw.length > 320) throw new Error('Robot input is limited to 320 bytes');
+    await this.devLinkWrite({op: 'input', d: this.devLinkBase64(raw)});
+  }
+
+  devLinkWaitForTerminal(timeoutMs=this.devLinkRunTimeoutMs) {
+    return new Promise((resolve, reject) => {
+      const waiter = {resolve: resolve, reject: reject, timer: undefined};
+      waiter.timer = setTimeout(() => {
+        this.devLinkTerminalWaiters = this.devLinkTerminalWaiters
+          .filter(item => item !== waiter);
+        reject(new Error('Final Bluetooth result was not received'));
+      }, timeoutMs);
+      this.devLinkTerminalWaiters.push(waiter);
+    });
+  }
+
+  async devLinkRecoverOutcome(runId) {
+    let lastError;
+    let previousFingerprint = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        // The board retains its last terminal state. This recovers a result
+        // when the final notification (or one fragment of it) was lost.
+        const snapshot = await this.devLinkWrite({op: 'result'}, 'result');
+        const outcome = snapshot.outcome;
+        if (outcome && outcome.run_id === runId) {
+          const fingerprint = JSON.stringify(outcome);
+          if (fingerprint === previousFingerprint) return outcome;
+          previousFingerprint = fingerprint;
+          lastError = new Error('Confirming retained robot result');
+        }
+        if (!snapshot.running) {
+          if (!outcome || outcome.run_id !== runId) {
+            throw new Error('Robot stopped without a retained result');
+          }
+        }
+      } catch (error) {
+        lastError = error;
+      }
+      await this.delayPromise(this.devLinkRecoveryDelayMs);
+    }
+    throw lastError || new Error('Could not recover the robot result');
+  }
+
+  devLinkMotorSafeDelay(source) {
+    // Generated Robot blocks call the runtime through the `robot` module.
+    // Motor switching on this ESP32-C3 layout can poison an actively-chatty
+    // Windows notification session, so physical runs are accepted once,
+    // left completely quiet, then read back from retained state. Sensor,
+    // display and ordinary MicroPython programs keep live terminal output.
+    if (/robot\.characterise\s*\(/.test(source)) {
+      return this.devLinkCalibrationSafeDelayMs;
+    }
+    const motion = /robot\.(?:forward|forward_at|backward|backward_at|turn|turn_degrees|turn90|nudge|maze|follow_line|raw_forward|_drive_one)\s*\(/;
+    return motion.test(source) ? this.devLinkMotorSafeDelayMs : 0;
+  }
+
+  async devLinkListFiles() {
+    const reply = await this.devLinkWrite({op: 'files'}, 'files');
+    return reply.items || [];
+  }
+
+  async devLinkReadFile(name) {
+    this.devLinkBusyCount++;
+    try {
+      const info = await this.devLinkWrite(
+        {op: 'file_info', name: name}, 'file_info');
+      const expectedSize = Number(info.size);
+      const chunks = [];
+      let received = 0;
+      while (received < expectedSize) {
+        const reply = await this.devLinkWrite(
+          {op: 'file_read', name: name, offset: received, length: 180}, 'file');
+        if (Number(reply.offset) !== received) {
+          throw new Error('Robot returned an unexpected file offset');
+        }
+        const binary = atob(reply.data || '');
+        const block = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index++) {
+          block[index] = binary.charCodeAt(index);
+        }
+        if (!block.length && !reply.eof) {
+          throw new Error('Robot returned an empty file chunk');
+        }
+        chunks.push(block);
+        received += block.length;
+        files.update_file_status('Getting ' + name + '... ' + received
+                                 + '/' + expectedSize + ' bytes');
+        if (reply.eof) break;
+      }
+      const body = new Uint8Array(received);
+      let offset = 0;
+      chunks.forEach(block => { body.set(block, offset); offset += block.length; });
+      const digest = await crypto.subtle.digest('SHA-256', body);
+      const actualHash = Array.from(new Uint8Array(digest))
+        .map(value => value.toString(16).padStart(2, '0')).join('');
+      if (body.length !== expectedSize || actualHash !== info.sha256) {
+        throw new Error('Downloaded file failed size/SHA-256 verification');
+      }
+      return body;
+    } finally {
+      this.devLinkBusyCount = Math.max(0, this.devLinkBusyCount - 1);
+    }
+  }
+
+  async devLinkResolveStoredResult(outcome) {
+    const manifest = outcome && outcome.result;
+    if (!manifest || typeof manifest !== 'object' || !manifest.stored_file) {
+      return outcome;
+    }
+    const body = await this.devLinkReadFile(String(manifest.stored_file));
+    const digest = await crypto.subtle.digest('SHA-256', body);
+    const actualHash = Array.from(new Uint8Array(digest))
+      .map(value => value.toString(16).padStart(2, '0')).join('');
+    if (body.length !== Number(manifest.bytes)
+        || actualHash !== String(manifest.sha256).toLowerCase()) {
+      throw new Error('Stored robot result did not match its manifest');
+    }
+    let decoded;
+    try {
+      decoded = JSON.parse(new TextDecoder().decode(body));
+    } catch (error) {
+      throw new Error('Stored robot result is not valid JSON');
+    }
+    return Object.assign({}, outcome, {result: decoded});
+  }
+
+  async runProgram(source, input) {
+    if (!this.devLink) throw new Error('The connected Bluetooth device is not a DevLink robot');
+    this.devLinkBusyCount++;
+    UI ['workspace'].receiving();
+    UI ['progress'].start(Math.max(1, source.length));
+    try {
+      await this.devLinkUpload(source);
+      // Explicit null prevents a previous run-again value leaking into a
+      // normal click of the Run button.
+      await this.devLinkSetInput(input === undefined ? null : input);
+      const motorSafeDelay = this.devLinkMotorSafeDelay(source);
+      const terminal = motorSafeDelay ? null : this.devLinkWaitForTerminal();
+      const runAck = await this.devLinkWrite(
+        {op: 'run', quiet: motorSafeDelay > 0});
+      let outcome;
+      if (motorSafeDelay) {
+        term.write('[motor-safe run: BLE quiet during movement]\r\n');
+        await this.delayPromise(motorSafeDelay);
+        outcome = await this.devLinkRecoverOutcome(runAck.run_id);
+      } else {
+        try {
+          outcome = await terminal;
+        } catch (error) {
+          term.write('[recovering final robot result]\r\n');
+          outcome = await this.devLinkRecoverOutcome(runAck.run_id);
+        }
+      }
+      outcome = await this.devLinkResolveStoredResult(outcome);
+      this.devLinkLastResult = outcome.result;
+      if (outcome.t === 'failed') throw new Error(outcome.message || 'robot program failed');
+      return outcome.result;
+    } finally {
+      this.devLinkBusyCount = Math.max(0, this.devLinkBusyCount - 1);
+      UI ['progress'].end();
+      UI ['workspace'].runButton.status = true;
+      UI ['workspace'].runButton.dom.className = 'icon';
+      UI ['workspace'].toolbarButton.className = 'icon medium';
+    }
+  }
+
+  async runAgainWithLastResult(source) {
+    return this.runProgram(source, this.devLinkLastResult);
+  }
+
+  async stopProgram() {
+    if (this.devLink) {
+      try {
+        return await this.devLinkWrite({op: 'stop'});
+      } finally {
+        // A stop acknowledgement is enough to return control to the user.
+        // Do not depend on a later terminal/result notification: there may
+        // have been no program running, so no notification would arrive.
+        this.devLinkIdleUi();
+      }
+    }
+  }
+
+  /**Show an attached DevLink robot as connected but not running.*/
+  devLinkIdleUi() {
+    const workspace = UI ['workspace'];
+    workspace.channel_connect.className = '';
+    workspace.runButton.status = true;
+    workspace.runButton.dom.className = 'icon';
+    workspace.toolbarButton.className = 'icon medium';
+    workspace.connectButton.className = 'icon on';
+    workspace.term.className = 'on';
+  }
+
 	/**
    * Connect using webbluetooth protocol, will ask user permission for the bluetooth device.
    */
@@ -611,6 +890,7 @@ class webbluetooth {
       .then(device => {
         UI ['workspace'].connecting ();
         this.device = device; //check
+        this.devLink = device.name === 'MPY-DEV-C3';
         UI ['notify'].log('Found ' + device.name);
         UI ['notify'].log('Connecting to GATT Server...');
         this.device.addEventListener('gattserverdisconnected', this.disconnect.bind(this));
@@ -647,10 +927,22 @@ class webbluetooth {
         UI ['notify'].log('Notifications started');
         this.txCharacteristic.addEventListener('characteristicvaluechanged', this.handleNotifications.bind(this));
         term.on();
-        term.write('\x1b[31mConnected using Web Bluetooth API !\x1b[m\r\n');
+        term.write('\x1b[31mConnected using Web Bluetooth API'
+                   + (this.devLink ? ' (MicroPython DevLink)' : '')
+                   + ' !\x1b[m\r\n');
         this.connected = true;
-        mux.bufferPush ('\r');
-        if (UI ['workspace'].runButton.status == true)
+        if (this.devLink) {
+          clearInterval(this.devLinkHeartbeat);
+          this.devLinkHeartbeat = setInterval(
+            this.devLinkHeartbeatTick.bind(this), 10000);
+        }
+        if (!this.devLink) mux.bufferPush ('\r');
+        // Legacy Nordic-UART boards expose a REPL and remain in the
+        // receiving state after connection. DevLink is request/response:
+        // a fresh, idle connection must show Run, not Stop.
+        if (this.devLink)
+          this.devLinkIdleUi();
+        else if (UI ['workspace'].runButton.status == true)
           UI ['workspace'].receiving ();
         this.watcher = setInterval(this.watch.bind(this), 50);
       }).catch(error => {
@@ -665,6 +957,13 @@ class webbluetooth {
    * Disconnect device connected with webbluetooth protocol.
    */
   disconnect () {
+    const disconnectError = new Error('Bluetooth robot disconnected');
+    this.devLinkWaiters.splice(0).forEach(waiter => {
+      clearTimeout(waiter.timer);
+      waiter.reject(disconnectError);
+    });
+    this.devLinkTerminalWaiters.splice(0).forEach(waiter =>
+      { clearTimeout(waiter.timer); waiter.reject(disconnectError); });
     if (!this.device) {
       UI ['notify'].log('No Bluetooth Device connected...');
     } else {
@@ -680,8 +979,14 @@ class webbluetooth {
     this.txCharacteristic = undefined;
     this.rxCharacteristic = undefined;
     this.connected = false;
+    this.devLink = false;
+    this.devLinkLineBuffer = '';
+    this.devLinkHeartbeatPending = false;
+    this.devLinkBusyCount = 0;
 
     clearInterval(this.watcher);
+    clearInterval(this.devLinkHeartbeat);
+    this.devLinkHeartbeat = undefined;
     UI ['workspace'].runAbort();
   }
 
@@ -696,6 +1001,52 @@ class webbluetooth {
     let chunk = "";
     for (let i = 0; i < value.byteLength; i++) {
       chunk += String.fromCharCode(value.getUint8(i));
+    }
+    if (this.devLink) {
+      this.devLinkLineBuffer += chunk;
+      let newline;
+      while ((newline = this.devLinkLineBuffer.indexOf('\n')) >= 0) {
+        const line = this.devLinkLineBuffer.slice(0, newline);
+        this.devLinkLineBuffer = this.devLinkLineBuffer.slice(newline + 1);
+        if (!line) continue;
+        let message;
+        try {
+          message = JSON.parse(line);
+        } catch (error) {
+          term.write(line + '\r\n');
+          continue;
+        }
+        if (message.t === 'log') {
+          const text = String(message.v || '') + (message.end === undefined ? '\n' : message.end);
+          term.write(text.replace(/\n/g, '\r\n'));
+          Files.received_string = Files.received_string.concat(text);
+          Tool.bipesVerify();
+        } else if (message.t === 'event') {
+          term.write('[data] ' + JSON.stringify(message.v) + '\r\n');
+        } else if (message.t === 'started') {
+          term.write('[robot started]\r\n');
+        } else if (['done', 'failed', 'cancelled'].includes(message.t)) {
+          this.devLinkLastResult = message.result;
+          term.write(message.t === 'done'
+            ? '[robot finished] ' + JSON.stringify(message.result) + '\r\n'
+            : '[robot ' + message.t + '] ' + (message.message || '') + '\r\n');
+          const terminals = this.devLinkTerminalWaiters.splice(0);
+          terminals.forEach(waiter => {
+            clearTimeout(waiter.timer);
+            waiter.resolve(message);
+          });
+        }
+        const waiterIndex = this.devLinkWaiters.findIndex(waiter =>
+          waiter.operation === message.op
+          && (message.t === 'error' || waiter.type === message.t));
+        if (waiterIndex >= 0) {
+          const waiter = this.devLinkWaiters.splice(waiterIndex, 1)[0];
+          clearTimeout(waiter.timer);
+          if (message.t === 'error') waiter.reject(new Error(message.message));
+          else waiter.resolve(message);
+        }
+      }
+      return;
     }
     term.write(chunk);
     Tool.bipesVerify ();
@@ -719,7 +1070,3 @@ class webbluetooth {
     Files.received_string = Files.received_string.concat(chunk);
   }
 }
-
-
-
-

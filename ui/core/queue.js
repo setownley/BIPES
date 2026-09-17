@@ -457,7 +457,7 @@ window.addEventListener('load', function () {
                 Blockly.Python.ORDER_FUNCTION_CALL];
     };
 
-    /* ---- drive at a raw duty ----------------------------------------------
+    /* ---- drive at an exact duty -------------------------------------------
      * forward()'s three named speeds (slow/medium/fast) are enough for most
      * lessons; this is for students exploring what duty itself does. Goes
      * through robot.forward_at(), which still runs through the same
@@ -468,17 +468,52 @@ window.addEventListener('load', function () {
         init: function() {
             this.setColour('#FFD400');
             this.appendDummyInput()
-                .appendField('drive forward at')
-                .appendField(new Blockly.FieldNumber(800, 0, 1023, 1), 'DUTY');
+                .appendField('drive')
+                .appendField(new Blockly.FieldDropdown([
+                    ['forward', 'forward'],
+                    ['backward', 'backward']
+                ]), 'DIR')
+                .appendField('at')
+                .appendField(new Blockly.FieldNumber(300, 0, 300, 1), 'DUTY');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Drive forward at a specific duty, 0 to 1023, instead of a named speed. Below about 600 the robot may not move at all - static friction needs a certain duty to overcome before the wheels turn.');
+            this.setTooltip('Drive forward or backward at an exact safe duty from 0 to 300. Gyro steering keeps the robot on its heading after motor calibration.');
         }
     };
 
     Blockly.Python['robot_forward_at'] = function(block) {
         Blockly.Python.definitions_['import_robot'] = 'import robot';
-        return 'robot.forward_at(' + block.getFieldValue('DUTY') + ')\n';
+        var fn = block.getFieldValue('DIR') === 'backward' ? 'backward_at' : 'forward_at';
+        return 'robot.' + fn + '(' + block.getFieldValue('DUTY') + ')\n';
+    };
+
+    /* ---- DevLink data passed between repeated block runs ----------------- */
+    Blockly.Blocks['robot_previous_result'] = {
+        init: function() {
+            this.setColour('#FFD400');
+            this.appendDummyInput().appendField('data from previous robot run');
+            this.setOutput(true, null);
+            this.setTooltip('The value returned by the previous Bluetooth run, or None on the first run.');
+        }
+    };
+
+    Blockly.Python['robot_previous_result'] = function(block) {
+        return ['ctx.input', Blockly.Python.ORDER_ATOMIC];
+    };
+
+    Blockly.Blocks['robot_return_result'] = {
+        init: function() {
+            this.setColour('#FFD400');
+            this.appendValueInput('VALUE').appendField('return to next robot run');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Save a value as this run’s result. “Run again with result” passes it into the next run.');
+        }
+    };
+
+    Blockly.Python['robot_return_result'] = function(block) {
+        var value = Blockly.Python.valueToCode(block, 'VALUE', Blockly.Python.ORDER_NONE) || 'None';
+        return '_devlink_result = ' + value + '\n';
     };
 
     /* Gyro motor calibration -- self-contained, nothing to upload. The whole
@@ -844,37 +879,47 @@ window.addEventListener('load', function () {
             this.appendDummyInput()
                 .appendField('gyro motor')
                 .appendField(new Blockly.FieldDropdown([
-                    ['measure breakaway', 'breakaway'],
-                    ['set trim', 'autotrim'],
-                    ['drive straight', 'straight'],
-                    ['check straightness', 'check']
+                    ['full safe calibration', 'breakaway'],
+                    ['recalibrate motors', 'autotrim'],
+                    ['safe straight run', 'straight'],
+                    ['safe straightness check', 'check']
                 ]), 'ACTION');
             this.appendDummyInput()
                 .appendField('speed')
-                .appendField(new Blockly.FieldNumber(800, 0, 1023, 10), 'DUTY')
+                .appendField(new Blockly.FieldNumber(300, 0, 300, 10), 'DUTY')
                 .appendField('for')
-                .appendField(new Blockly.FieldNumber(2, 0.5, 10, 0.5), 'SECS')
+                .appendField(new Blockly.FieldNumber(2, 0.5, 8, 0.5), 'SECS')
                 .appendField('s');
-            this.appendDummyInput()
-                .appendField('correction strength')
-                .appendField(new Blockly.FieldNumber(8, 0, 128, 1), 'KP');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Measure breakaway: about 90 seconds, robot pivots, needs half a metre clear - RESET the board afterwards. Set trim / drive straight / check: needs a couple of metres of clear floor. Speed and seconds are ignored by "measure breakaway".');
+            this.setTooltip('Compatibility block for older projects. Both calibration choices now run the current bidirectional safe calibration. Straight tests use gyro hold and the 300-duty mobile ceiling.');
         }
     };
 
     Blockly.Python['gyro_calibrate'] = function(block) {
         var action = block.getFieldValue('ACTION');
-        var duty = block.getFieldValue('DUTY') || '800';
-        var secs = block.getFieldValue('SECS') || '2';
-        var kp = block.getFieldValue('KP') || '8';
+        var duty = Math.min(300, Math.max(0,
+            Number(block.getFieldValue('DUTY') || 300)));
+        var secs = Math.min(8, Math.max(0,
+            Number(block.getFieldValue('SECS') || 2)));
 
-        Blockly.Python.definitions_['import_gyrocal'] =
-            'import time\nimport robot\nimport gyro';
-        Blockly.Python.definitions_['gyrocal_src'] = GYROCAL_SRC;
-
-        return "_gyrocal('" + action + "', " + duty + ", " + kp + ", " + secs + ")\n";
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        if (action === 'breakaway' || action === 'autotrim') {
+            return "_devlink_result = {'calibration': robot.characterise()}\n";
+        }
+        if (action === 'check') {
+            Blockly.Python.definitions_['import_gyro'] = 'import gyro';
+            return 'robot.forward_at(' + duty + ')\n'
+                 + 'robot.wait(' + secs + ')\n'
+                 + 'robot.stop()\n'
+                 + '_gyro_error = gyro.gyro_turn()\n'
+                 + "print('straightness yaw: %.2f deg' % _gyro_error)\n"
+                 + "_devlink_result = {'yaw_deg': _gyro_error, 'duty': " + duty
+                 + ", 'seconds': " + secs + "}\n";
+        }
+        return 'robot.forward_at(' + duty + ')\n'
+             + 'robot.wait(' + secs + ')\n'
+             + 'robot.stop()\n';
     };
 
     var MMCAL_SRC = [
@@ -1192,9 +1237,9 @@ window.addEventListener('load', function () {
             this.appendDummyInput()
                 .appendField('motor')
                 .appendField(new Blockly.FieldDropdown([
-                    ['characterise (do this first)', 'characterise'],
-                    ['turn on the spot', 'turn'],
-                    ['drive straight', 'forward']
+                    ['safe characterise', 'characterise'],
+                    ['safe measured turn', 'turn'],
+                    ['safe straight test', 'forward']
                 ]), 'ACTION');
             this.appendDummyInput()
                 .appendField('turn')
@@ -1202,27 +1247,34 @@ window.addEventListener('load', function () {
                 .appendField('deg  (+ right)');
             this.appendDummyInput()
                 .appendField('drive at')
-                .appendField(new Blockly.FieldNumber(700, 0, 1023, 10), 'DUTY')
+                .appendField(new Blockly.FieldNumber(300, 0, 300, 10), 'DUTY')
                 .appendField('for')
-                .appendField(new Blockly.FieldNumber(2, 0.5, 20, 0.5), 'SECS')
+                .appendField(new Blockly.FieldNumber(2, 0.5, 8, 0.5), 'SECS')
                 .appendField('s');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Run "characterise" once per robot first - it spins on the spot for ten seconds and works out the motor gain, time constant and deadband, then derives the control gains. After that, "turn" and "drive straight" both use those numbers. Fields not used by the chosen action are ignored.');
+            this.setTooltip('Compatibility motor test for older projects. It now uses the current robot API, gyro-measured turns, bidirectional calibration, and the 300-duty mobile limit.');
         }
     };
 
     Blockly.Python['mmcal'] = function(block) {
         var action = block.getFieldValue('ACTION');
-        var deg = block.getFieldValue('DEGREES') || '90';
-        var duty = block.getFieldValue('DUTY') || '700';
-        var secs = block.getFieldValue('SECS') || '2';
+        var degrees = Number(block.getFieldValue('DEGREES') || 90);
+        var duty = Math.min(300, Math.max(0,
+            Number(block.getFieldValue('DUTY') || 300)));
+        var secs = Math.min(8, Math.max(0,
+            Number(block.getFieldValue('SECS') || 2)));
 
-        Blockly.Python.definitions_['import_mmcal'] =
-            'import time\nimport robot\nimport gyro';
-        Blockly.Python.definitions_['mmcal_src'] = MMCAL_SRC;
-
-        return "_mmcal('" + action + "', " + deg + ", " + duty + ", " + secs + ")\n";
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        if (action === 'characterise') return 'robot.characterise()\n';
+        if (action === 'turn') {
+            var direction = degrees < 0 ? 'left' : 'right';
+            var angle = Math.min(450, Math.abs(degrees));
+            return "robot.turn_degrees('" + direction + "', " + angle + ")\n";
+        }
+        return 'robot.forward_at(' + duty + ')\n'
+             + 'robot.wait(' + secs + ')\n'
+             + 'robot.stop()\n';
     };
 
     /* Calibrate motors -- one block, one button. Calls robot.characterise(),
@@ -1245,12 +1297,12 @@ window.addEventListener('load', function () {
                 .appendField(new Blockly.FieldImage("media/calibrate.jpg", 55, 55, "*"));
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Run this once on each robot, on the floor, with a little space around it. It spins on the spot for about ten seconds and works out how this robot’s motors behave, then shows the numbers on the screen. After that, forward and turn blocks steer straight and turn accurately by themselves. Remove this block afterwards.');
+            this.setTooltip('Run once per robot on the floor with the ultrasonic sensor pointing ahead and at least 25 cm clear. It tests both turn directions for about a minute, filters floor bumps, and saves the steering calibration. Remove this block afterwards.');
         }
     };
 
     Blockly.Python['robot_calibrate'] = function(block) {
         Blockly.Python.definitions_['import_robot'] = 'import robot';
-        return 'robot.characterise()\n';
+        return "_devlink_result = {'calibration': robot.characterise()}\n";
     };
 });

@@ -41,6 +41,8 @@
 <block type="mmcal"></block>
 
 <block type="robot_forward_at"></block>
+<block type="robot_previous_result"></block>
+<block type="robot_return_result"></block>
 </category>
   <category name="%{BKY_CATLOGIC}" colour="%{BKY_LOGIC_HUE}">
       <block type="controls_if"></block>
@@ -3434,7 +3436,6 @@ _
 </category>
 </category>
 </document>
-
 
 
 

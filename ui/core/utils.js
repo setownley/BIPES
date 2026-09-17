@@ -146,6 +146,17 @@ class Tool {
       : code_;
 
     if (code) {
+      if (Channel ['webbluetooth'].connected && Channel ['webbluetooth'].devLink) {
+        if (code_ != undefined) {
+          UI ['notify'].send('Use the Files tab for Bluetooth downloads; USB is required for board-file uploads.');
+          return;
+        }
+        Channel ['webbluetooth'].runProgram(code).catch(error => {
+          UI ['notify'].send('Robot run failed: ' + error.message);
+          term.write('\r\nRobot run failed: ' + error.message + '\r\n');
+        });
+        return;
+      }
       code+='\r\r';//Snek workaround
 
       mux.bufferPush (`\x05${code}\x04`);
@@ -153,15 +164,39 @@ class Tool {
     }
   }
 
+  /**Run block-generated code again with the previous DevLink result as input.*/
+  static runPythonAgain () {
+    if (!(Channel ['webbluetooth'].connected && Channel ['webbluetooth'].devLink)) {
+      UI ['notify'].send('Connect to MPY-DEV-C3 with Bluetooth first.');
+      return;
+    }
+    const code = Files.robot_settings_prelude ()
+               + Blockly.Python.workspaceToCode(Code.workspace);
+    Channel ['webbluetooth'].runAgainWithLastResult(code).catch(error => {
+      UI ['notify'].send('Robot run failed: ' + error.message);
+      term.write('\r\nRobot run failed: ' + error.message + '\r\n');
+    });
+  }
+
   /**Send ``\x03\x03`` to stop running a program, see a `ASCII table
   * <https://www.ascii-code.com/>`_ to know more.*/
   static stopPython () {
+    if (Channel ['webbluetooth'].connected && Channel ['webbluetooth'].devLink) {
+      Channel ['webbluetooth'].stopProgram().catch(error =>
+        UI ['notify'].send('Could not stop robot: ' + error.message));
+      return;
+    }
     //Send Ctrl+C to stop program
     mux.bufferPush ('\x03\x03');
 	//Classroom safety: always stop motors after interrupting the program
     mux.bufferPush ('\rimport robot; robot.stop()\r');
   }
   static softReset () {
+    if (Channel ['webbluetooth'].connected && Channel ['webbluetooth'].devLink) {
+      Channel ['webbluetooth'].stopProgram().catch(error =>
+        UI ['notify'].send('Could not stop robot: ' + error.message));
+      return;
+    }
     if (Channel ['websocket'].connected)
       setTimeout(() => {Channel ['websocket'].connect(UI ['workspace'].websocket.url.value, UI ['workspace'].websocket.pass.value)}, 2000);
     else if (Channel ['webbluetooth'].connected)
@@ -728,6 +763,15 @@ class files {
    * List files from device, on success, calls :js:func:`files.updateTable` to display it.
    */
   listFiles () {
+    if (Channel ['webbluetooth'].connected && Channel ['webbluetooth'].devLink) {
+      files.update_file_status('Reading robot files over Bluetooth...');
+      Channel ['webbluetooth'].devLinkListFiles().then(items => {
+        this.renderFileList(items.map(item => item.name));
+      }).catch(error => {
+        files.update_file_status('Unable to list robot files: ' + error.message);
+      });
+      return;
+    }
     mux.bufferPush ('import os; os.listdir(\'.\')\r', files.updateTable.bind(this)); //Using ; to trigger only one ">>>"
   }
    /**
@@ -736,6 +780,21 @@ class files {
    */
   run (file) {
     files.update_file_status('Executing  ' + file);
+
+    if (Channel ['webbluetooth'].connected && Channel ['webbluetooth'].devLink) {
+      if (!file.toLowerCase().endsWith('.py')) {
+        files.update_file_status('Only Python files can be run.');
+        return;
+      }
+      Channel ['webbluetooth'].devLinkReadFile(file).then(data => {
+        return Channel ['webbluetooth'].runProgram(new TextDecoder().decode(data));
+      }).then(() => {
+        files.update_file_status('Finished ' + file);
+      }).catch(error => {
+        files.update_file_status('Unable to run ' + file + ': ' + error.message);
+      });
+      return;
+    }
 
     //import only works once
     //In case module already loaded, unloaded it
@@ -752,6 +811,10 @@ class files {
    * @param {string} file - File name of the file to be deleted.
    */
   delete (file) {
+    if (Channel ['webbluetooth'].connected && Channel ['webbluetooth'].devLink) {
+      files.update_file_status('Bluetooth deletion is disabled; use USB for board maintenance.');
+      return;
+    }
     let msg = "Are you sure you want to delete " + file + "?";
 
     if (confirm(msg)) {
@@ -786,6 +849,21 @@ class files {
    */
   get_file (src_fname) {
     this.file_save_as.className = 'py';
+    if (Channel ['webbluetooth'].connected && Channel ['webbluetooth'].devLink) {
+      this.get_file_name = src_fname;
+      files.update_file_status(`Getting ${src_fname} over Bluetooth...`);
+      Channel ['webbluetooth'].devLinkReadFile(src_fname).then(data => {
+        this.get_file_data = data;
+        files.update_file_status(`Got ${src_fname}, ${data.length} verified bytes`);
+        if (!this.viewOnly)
+          saveAs(new Blob([data], {type: 'application/octet-stream'}), src_fname);
+        else
+          Tool.updateSourceCode(new Blob([data], {type: 'text/plain'}), src_fname);
+      }).catch(error => {
+        files.update_file_status(`Unable to get ${src_fname}: ${error.message}`);
+      });
+      return;
+    }
     switch (Channel ['mux'].currentChannel) {
       case 'websocket':
         let rec = new Uint8Array(2 + 1 + 1 + 8 + 4 + 2 + 64);
@@ -892,13 +970,16 @@ class files {
       let treat_ = match_ [match_.length - 1].replace(/[\[\]]/g, '');
       let split_ = treat_.split('"'[0]);
       let files_ = eval("[" + split_ + "]");
+      this.renderFileList(files_);
+
+      Files.received_string = Files.received_string.replace(re, '\r\n') //purge received string out
+    }
+  }
+
+  renderFileList (files_) {
       this.deviceFiles = files_;   // so the pylibs picker can mark what's already on board
-
       UI ['notify'].send("File list updated at " + Tool.unix2date() + ".");
-
-
       this.fileList.innerHTML = '';
-
       files_.forEach (file => {
         let wrapper2_ = new DOM ('div');
         let openButton_ = new DOM ('div', {innerText:file, className: 'runText'});
@@ -925,10 +1006,7 @@ class files {
 
         this.fileList.appendChild(wrapper2_._dom)
       })
-
-      Files.received_string = Files.received_string.replace(re, '\r\n') //purge received string out
       this.renderPylibs();   // refresh "on board" markers if the picker is open
-    }
   }
   /**
    * Toggle the "Library files" dialog open/closed (the cloud icon next to

@@ -60,10 +60,10 @@ function checkCookie() {
   <script src="core/javascript_compressed.js?ver=0.2.1.8260042"></script>
   <script src="core/python_compressed.js?ver=0.2.3.9292231"></script>
   <script src="core/code.js?ver=0.2.3.1125"></script>
-  <script src="core/channel.js?ver=0.2.5.0820"></script>
-  <script src="core/utils.js?ver=0.2.9.0914"></script>
-  <script src="core/ui.js?ver=0.2.19.0914"></script>
-  <script src="core/queue.js?ver=0.2.19.0914"></script>
+  <script src="core/channel.js?ver=0.2.9.0915"></script>
+  <script src="core/utils.js?ver=0.3.2.0915"></script>
+  <script src="core/ui.js?ver=0.2.20.0915"></script>
+  <script src="core/queue.js?ver=0.2.22.0915"></script>
   <script src="core/games.js?ver=0.2.16.0912"></script>
   <script src="core/FileSaver.js"></script>
   <script src="core/shortcut.js"></script>
@@ -175,6 +175,8 @@ document.body.appendChild(el);
 
   <div class='channel-panel'>
     <button class='icon' id="bluetoothButton">Bluetooth</button>
+    <button class='button' id="repeatRunButton" onclick="Tool.runPythonAgain(); return false;"
+            title="Run the blocks again, passing the last returned result back into the program">Run again with result</button>
     <div>
       <button class='icon' id="serialButton">Serial</button>
       <label for="resetBoard" class="checkswitch">
@@ -768,6 +770,8 @@ function eraseCookieModal(name) {
 <block type="mmcal"></block>
 
 <block type="robot_forward_at"></block>
+<block type="robot_previous_result"></block>
+<block type="robot_return_result"></block>
 </category>
   <category name="%{BKY_CATLOGIC}" colour="%{BKY_LOGIC_HUE}">
       <block type="controls_if"></block>
@@ -9825,8 +9829,3 @@ def forward(duty, seconds, tol=1.0):
 </script>
 <!-- BAKED-OFFLINE-ASSETS-END -->
 </html>
-
-
-
-
-

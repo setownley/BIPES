@@ -58,7 +58,7 @@ check('OS_TIMER defaults True', r.OS_TIMER is True, repr(r.OS_TIMER))
 check('Timer 0 constructed', ('construct', 0) in fakehw.TIMER_EVENTS)
 check('Timer 0 started', ('init', 0) in fakehw.TIMER_EVENTS)
 check('_tim is live', r._tim is not None)
-check('VERSION bumped to 0.5.8', r.VERSION == '0.5.8', r.VERSION)
+check('VERSION is current', r.VERSION == '1.2.51', r.VERSION)
 check('SETTINGS_FILE name', r.SETTINGS_FILE == 'robot_settings.txt', r.SETTINGS_FILE)
 
 print('Import with OS_TIMER=1')
@@ -75,7 +75,8 @@ check('Timer NEVER constructed', constructs() == [], repr(fakehw.TIMER_EVENTS))
 check('no timer init at all', inits() == [], repr(fakehw.TIMER_EVENTS))
 check('_tim is None', r._tim is None)
 check('public API intact', all(hasattr(r, n) for n in
-      ('forward', 'stop', 'distance_mm', 'show', 'os_timer', 'apply_settings')))
+      ('forward', 'forward_at', 'backward', 'backward_at', 'turn_degrees',
+       'nudge', 'stop', 'distance_mm', 'show', 'os_timer', 'apply_settings')))
 
 print('Malformed / hostile settings files all fall back to timer ON')
 for bad in ('OS_TIMER=banana\n', 'OS_TIMER=\n', '\n', 'garbage\n',
@@ -139,6 +140,42 @@ r.os_timer(True)
 check('os_timer(True) restarts', ('init', 0) in fakehw.TIMER_EVENTS and r._tim is not None)
 with open(SETTINGS) as f:
     check('os_timer() did NOT rewrite the settings file', f.read().strip() == 'OS_TIMER=1')
+
+# ------------------------------------------ calibration dashboard recovery
+print('characterise() always restores the dashboard timer')
+write_settings('OS_TIMER=1\n')
+r = load_robot()
+original_characterise = r._characterise
+def successful_cal(verbose=True):
+    r._timer_stop()
+    return ('cal', 'ok')
+r._characterise = successful_cal
+fakehw.TIMER_EVENTS.clear()
+check('calibration result is preserved', r.characterise() == ('cal', 'ok'))
+check('successful calibration restarts Timer 0',
+      r._tim is not None and ('init', 0) in fakehw.TIMER_EVENTS,
+      repr(fakehw.TIMER_EVENTS))
+def failed_cal(verbose=True):
+    r._timer_stop()
+    raise RuntimeError('test failure')
+r._characterise = failed_cal
+fakehw.TIMER_EVENTS.clear()
+check('failed calibration returns None', r.characterise() is None)
+check('failed calibration restarts Timer 0',
+      r._tim is not None and ('init', 0) in fakehw.TIMER_EVENTS,
+      repr(fakehw.TIMER_EVENTS))
+r._characterise = original_characterise
+
+write_settings('OS_TIMER=0\n')
+r = load_robot()
+def electronics_cal(verbose=True):
+    r._timer_stop()
+    return True
+r._characterise = electronics_cal
+fakehw.TIMER_EVENTS.clear()
+r.characterise()
+check('electronics mode keeps calibration dashboard off',
+      r._tim is None and inits() == [], repr(fakehw.TIMER_EVENTS))
 
 # -------------------------------------------------------------- shutdown
 print('shutdown()')

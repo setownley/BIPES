@@ -4,7 +4,7 @@ Lives in the firmware folder next to the .bin and robot files. Run from anywhere
 Per board: plug it in, press Enter, wait for DONE (~60s), unplug, next.
 
 Requires (one-time):  pip install esptool mpremote pyserial
-Uses:  firmware\\ESP32_GENERIC_C3-20260406-v1.28.0.bin  + the 5 robot files.
+Uses: MicroPython plus the robot runtime and Bluetooth development supervisor.
 """
 
 import subprocess
@@ -15,7 +15,8 @@ import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))   # = the firmware folder
 FIRMWARE_BIN = os.path.join(SCRIPT_DIR, "ESP32_GENERIC_C3-20260406-v1.28.0.bin")
-FILES = ["boot.py", "ssd1306.py", "vl53l0x_nb.py", "robot.py", "bench.py",
+FILES = ["boot.py", "main.py", "devlink_server.py", "ssd1306.py",
+         "vl53l0x_nb.py", "robot.py", "gyro.py", "bench.py",
          "maze_cal.json"]   # maze_cal = robot #1's values as a TEMPLATE:
                             # per-robot trim/launch/turn cals overwrite it later.
 ESP_VID = "303A"            # Espressif native USB

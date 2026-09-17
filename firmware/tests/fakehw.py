@@ -8,6 +8,7 @@ path for boards without the side sensor.
 import sys, types
 
 TIMER_EVENTS = []          # ('construct'|'init'|'deinit', timer_id)
+PWM_WRITES = []            # every commanded duty, for electrical-ceiling tests
 
 class Pin:
     OUT = 'OUT'; IN = 'IN'; PULL_UP = 'PULL_UP'
@@ -38,8 +39,13 @@ class PWM:
     def __init__(self, *a, **k): self._d = 0
     def freq(self, *a): return 1000
     def duty(self, *a):
-        if a: self._d = a[0]
+        if a:
+            self._d = a[0]
+            PWM_WRITES.append(self._d)
         return self._d
+    def duty_u16(self, *a):
+        if a: self._d = a[0] * 1023 // 65535
+        return self._d * 65535 // 1023
     def deinit(self): pass
 
 class ADC:
