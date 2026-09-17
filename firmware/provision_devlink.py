@@ -181,6 +181,19 @@ def select_port(requested: str | None) -> str:
         return available[requested.upper()]
 
     ports = esp_ports()
+    if not ports:
+        # Some Windows/native-USB combinations briefly expose no VID/PID to
+        # pyserial even though esptool or mpremote can connect.  The legacy
+        # provisioner relies on those tools after selecting a port, so let
+        # their own safe MicroPython/ROM handshake be the fallback detector.
+        others = other_serial_ports()
+        print(
+            "No VID 303A port is visible; trying esptool/mpremote automatic "
+            "USB detection."
+        )
+        if others:
+            print("  Ignoring non-ESP serial ports:", ", ".join(others))
+        return "auto"
     if len(ports) != 1:
         others = other_serial_ports()
         detail = "; other serial ports: %s" % ", ".join(others) if others else ""
@@ -207,10 +220,26 @@ def mpremote(port: str, *arguments: str, timeout: float = 60):
 def wait_for_port(port: str, timeout: float = 20):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if port.upper() in {item.upper() for item in esp_ports()}:
+        if port == "auto":
+            result = run(
+                [
+                    sys.executable,
+                    "-m",
+                    "mpremote",
+                    "connect",
+                    "auto",
+                    "exec",
+                    "print('PROVISION_USB_READY')",
+                ],
+                timeout=8,
+                allow_failure=True,
+            )
+            if result.returncode == 0 and "PROVISION_USB_READY" in result.stdout:
+                return
+        elif port.upper() in {item.upper() for item in esp_ports()}:
             return
         time.sleep(0.25)
-    raise ProvisionError("board did not return on %s after flashing" % port)
+    raise ProvisionError("board did not return over USB after flashing")
 
 
 def copy_files(port: str):
@@ -348,6 +377,7 @@ def reset_into_devlink(port: str):
 
 def provision(port: str, manifest: dict):
     print("[1/7] erasing flash...")
+    esptool_port = [] if port == "auto" else ["--port", port]
     run(
         [
             sys.executable,
@@ -355,8 +385,7 @@ def provision(port: str, manifest: dict):
             "esptool",
             "--chip",
             "esp32c3",
-            "--port",
-            port,
+            *esptool_port,
             "erase-flash",
         ]
     )
@@ -368,8 +397,7 @@ def provision(port: str, manifest: dict):
             "esptool",
             "--chip",
             "esp32c3",
-            "--port",
-            port,
+            *esptool_port,
             "--baud",
             "921600",
             "write-flash",

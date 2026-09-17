@@ -60,12 +60,7 @@ try:
     provision.other_serial_ports = lambda: [
         "COM7 (Standard Serial over Bluetooth link)"
     ]
-    try:
-        provision.select_port(None)
-        raise AssertionError("missing wired board was accepted")
-    except provision.ProvisionError as exc:
-        assert "data-capable cable" in str(exc)
-        assert "Bluetooth" in str(exc)
+    assert provision.select_port(None) == "auto"
 finally:
     provision.esp_ports = original_esp_ports
     provision.other_serial_ports = original_other_ports
