@@ -1296,13 +1296,11 @@ window.addEventListener('load', function () {
                 .appendField(new Blockly.FieldImage("media/calibrate.jpg", 55, 55, "*"));
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Teacher setup: Run performs a connected USB bench test. Save to robot stages cable-free calibration: unplug USB, power-cycle, and it starts after one second. It saves this robot’s motor and turn settings and shows CAL DONE or CAL FAIL.');
+            this.setTooltip('Teacher setup: use Save to robot, unplug USB, then power-cycle. It starts after one second, saves this robot’s motor and turn settings, and shows CAL DONE or CAL FAIL. Run is blocked because calibration must not move with USB attached.');
         }
     };
 
     Blockly.Python['robot_calibrate'] = function(block) {
-        Blockly.Python.definitions_['import_robot'] = 'import robot';
-        Blockly.Python.definitions_['import_time'] = 'import time';
-        return "time.sleep(1)\n_calibration = robot.characterise()\nprint('CALIBRATION', _calibration)\n";
+        return "raise RuntimeError('Use Save to robot, unplug USB, then power-cycle; calibration cannot Run over USB')\n";
     };
 });

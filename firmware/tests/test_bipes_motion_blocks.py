@@ -42,15 +42,15 @@ assert "robot.stop()" in gyro_block
 cal_start = source.index("Blockly.Python['robot_calibrate']")
 cal_end = source.index("});", cal_start)
 cal_generator = source[cal_start:cal_end]
-assert "time.sleep(1)" in cal_generator
-assert "robot.characterise()" in cal_generator
-assert "print('CALIBRATION', _calibration)" in cal_generator
+assert "Use Save to robot" in cal_generator
+assert "calibration cannot Run over USB" in cal_generator
 
 utils_source = (root / "ui" / "core" / "utils.js").read_text(encoding="utf-8")
 assert "robot_calibration_main ()" in utils_source
 assert '"time.sleep(1)\\n"' in utils_source
 assert "_calibration = robot.characterise()" in utils_source
-assert "os.rename('main.py', 'calibration_done.py')" in utils_source
+assert "os.rename('main.py', 'calibration_attempt.py')" in utils_source
+assert "os.rename('calibration_attempt.py', 'calibration_done.py')" in utils_source
 assert "robot._cal_show('CAL DONE', 'saved', 'load blocks')" in utils_source
 assert "robot._cal_show('CAL FAIL', 'power retry', 'see cal log')" in utils_source
 assert "getBlocksByType ('robot_calibrate', false)" in utils_source
