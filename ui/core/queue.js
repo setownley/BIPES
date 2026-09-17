@@ -1281,9 +1281,9 @@ window.addEventListener('load', function () {
        spinning on the spot, then derives the steering and turn gains from
        them. Needs robot.py 0.7.0+ and gyro.py on the board.
 
-       Run once per robot. After that the ordinary forward and turn blocks
-       use the result automatically - it is saved on the board and robot.py
-       loads it at import. Then take this block back out of the program.
+       Save this block to the robot with BIPES' normal save-to-robot button,
+       unplug USB, then power-cycle. It starts autonomously after one second.
+       After CAL DONE, replace it with the children's ordinary block program.
 
        Shows Km, Tm and the deadband on the OLED when it finishes, because
        the robot is on the floor and unplugged at that moment and the
@@ -1296,12 +1296,11 @@ window.addEventListener('load', function () {
                 .appendField(new Blockly.FieldImage("media/calibrate.jpg", 55, 55, "*"));
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Run once per robot on the floor with the ultrasonic sensor pointing ahead and at least 25 cm clear. It tests both turn directions for about a minute, filters floor bumps, and saves the steering calibration. Remove this block afterwards.');
+            this.setTooltip('Teacher setup: save this block to the robot, unplug USB, then power-cycle. After one second it calibrates autonomously, saves this robot’s motor and turn settings, and shows CAL DONE or CAL FAIL. On success, reconnect USB and replace it with the children’s block program.');
         }
     };
 
     Blockly.Python['robot_calibrate'] = function(block) {
-        Blockly.Python.definitions_['import_robot'] = 'import robot';
-        return "_devlink_result = {'calibration': robot.characterise()}\n";
+        return "raise RuntimeError('Use Save blocks to robot for cable-free calibration; do not use Run')\n";
     };
 });

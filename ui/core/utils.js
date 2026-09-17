@@ -724,6 +724,34 @@ class files {
          + "robot.apply_settings()\n";
   }
   /**
+   * One-shot, cable-free motor calibration image. save_main() substitutes
+   * this complete program when the workspace contains Calibrate motors.
+   * Success renames main.py; failure leaves it in place for a power retry.
+   */
+  robot_calibration_main () {
+    return "import os\n"
+         + "import time\n"
+         + "import robot\n"
+         + "robot.apply_settings()\n"
+         + "time.sleep(1)\n"
+         + "_calibration = robot.characterise()\n"
+         + "robot._timer_stop()\n"
+         + "if _calibration is not None:\n"
+         + "    try:\n"
+         + "        os.remove('calibration_done.py')\n"
+         + "    except OSError:\n"
+         + "        pass\n"
+         + "    try:\n"
+         + "        os.rename('main.py', 'calibration_done.py')\n"
+         + "    except OSError:\n"
+         + "        pass\n"
+         + "    robot._cal_show('CAL DONE', 'saved', 'load blocks')\n"
+         + "else:\n"
+         + "    robot._cal_show('CAL FAIL', 'power retry', 'see cal log')\n"
+         + "while True:\n"
+         + "    time.sleep(1)\n";
+  }
+  /**
    * One-click: generate Python from the block workspace and save it to the
    * board as main.py (runs automatically on every power-up / RESET).
    */
@@ -737,8 +765,16 @@ class files {
     // as a stale setting. Both files go up in one ordered stream: the settings
     // file has to be on flash before main.py calls apply_settings() at the next
     // power-up.
-    let codeStr = 'import robot\nrobot.apply_settings()\nrobot.cal_gate()\n'
-                + Blockly.Python.workspaceToCode (Code.workspace);
+    let calibrationBlocks = Code.workspace.getBlocksByType ('robot_calibrate', false);
+    let isCalibrationImage = calibrationBlocks.length > 0;
+    let codeStr;
+    if (isCalibrationImage) {
+      codeStr = this.robot_calibration_main ();
+      UI ['notify'].send ('Calibration saved. Unplug USB, then power-cycle the robot.');
+    } else {
+      codeStr = 'import robot\nrobot.apply_settings()\nrobot.cal_gate()\n'
+              + Blockly.Python.workspaceToCode (Code.workspace);
+    }
     this.put_files ([
       {name: 'robot_settings.txt', data: this.str_bytes (this.robot_settings_text ())},
       {name: 'main.py',            data: this.str_bytes (codeStr)}
