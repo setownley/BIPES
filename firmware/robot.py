@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "1.2.60"  # full-range wheel breakaway calibration
+VERSION = "1.2.61"  # consistent in-place calibration clearance guard
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -111,6 +111,7 @@ DRIVE_RECOVERY_EXIT_DEG = 4.0
                             # hysteresis prevents rapid grip-pulse chatter
 DRIVE_RECOVERY_DUTY = 450   # proven one-wheel launch; 550 browned out in repeats
 CAL_POWER_MAX = POWER_SAFE_MAX  # calibration may probe the full hardware-safe range
+CAL_CLEARANCE_MM = 160     # sensor-to-wall room for an in-place pivot plus margin
 TURN_POWER_MAX = 300       # faster cruise while retaining useful gyro samples
 TURN_LAUNCH_DUTY = 450     # sequential one-wheel kick climbed out of tile grout
 TURN_LAUNCH_MS = 120       # 60 ms per wheel before both settle at the 300 cap
@@ -1777,7 +1778,7 @@ def reset_characterisation():
             pass
 
 
-def _cal_guard_clearance(minimum_mm=160):
+def _cal_guard_clearance(minimum_mm=CAL_CLEARANCE_MM):
     """Abort near a wall; no echo means open space beyond sensor range."""
     if _abort_requested:
         raise RuntimeError("run stopped")
@@ -1806,7 +1807,7 @@ def _wheel_rate(ch, duty, reverse=False, brake_other=True):
     rates = []
     duty = min(max(int(duty), 0), CAL_POWER_MAX)
     try:
-        _cal_guard_clearance(200)
+        _cal_guard_clearance()
         _arm_motion_deadline()
         # Brake the other wheel so this is a loaded breakaway test rather
         # than a free-running wheel test.
@@ -1955,7 +1956,7 @@ def _spin_rate_one(duty, ms, direction):
     import gyro
     rates = []
     try:
-        _cal_guard_clearance(200)
+        _cal_guard_clearance()
         if direction > 0:
             _motors_raw(duty, False, duty, True)
         else:
@@ -2007,7 +2008,7 @@ def _measure_tm_one(duty, direction):
     last = 0.0
     t0 = time.ticks_ms()
     try:
-        _cal_guard_clearance(200)
+        _cal_guard_clearance()
         if direction > 0:
             _motors_raw(duty, False, duty, True)
         else:
@@ -2073,7 +2074,7 @@ def _validate_characterisation(trim_candidate=None):
     corrections = []
     requested = 30.0
     for index in range(3):
-        _cal_guard_clearance(200)
+        _cal_guard_clearance()
         _cal_show("validating", "%d of 3" % (index + 1), "left/right")
         left = float(turn_degrees("left", requested))
         _sleep_ms(200)
@@ -2094,7 +2095,7 @@ def _validate_characterisation(trim_candidate=None):
          % (previous_bias, adjustment, candidate))
 
     # Independently confirm the proposed bias before it reaches flash.
-    _cal_guard_clearance(200)
+    _cal_guard_clearance()
     left = float(turn_degrees("left", requested))
     _sleep_ms(200)
     right = float(turn_degrees("right", requested))
