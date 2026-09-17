@@ -75,28 +75,47 @@ robot._tick_cb(None)
 gyro.bus_lock.busy = False
 check("dashboard timer skips I2C while gyro owns the bus",
       robot._tick == tick_before)
-check("forward uses A1 and B2", first["A1"] > 0 and first["A2"] == 0
-      and first["B2"] > 0 and first["B1"] == 0, repr(first))
+check("forward full-duty launch staggers the second wheel",
+      first["A1"] > 0 and first["A2"] == 0
+      and first["B2"] == 0 and first["B1"] == 0, repr(first))
 check("grout launch stays at the brownout-safe electrical limit",
       0 < max(first.values()) <= robot.POWER_SAFE_MAX,
       repr(first))
-# Advance the controller beyond the 80 ms release pulse; ordinary driving and
+# Advance the controller beyond the staggered launch; ordinary driving and
 # steering may use the separately bounded one-wheel correction ceiling.
 robot._launch_until = robot.time.ticks_add(robot.time.ticks_ms(), -1)
-gyro.callback(5.0)  # drifted right: left wheel must slow, right must speed up
+gyro.callback(0.0)
+cruise = duties()
+check("forward cruise uses A1 and B2", cruise["A1"] > 0 and cruise["A2"] == 0
+      and cruise["B2"] > 0 and cruise["B1"] == 0, repr(cruise))
+gyro.callback(5.0)
 corrected = duties()
-check("positive yaw produces a left correction",
+check("positive yaw produces the verified forward correction",
       corrected["A1"] < corrected["B2"], repr(corrected))
 check("heading correction cannot exceed its one-wheel correction cap",
       max(corrected.values()) <= robot.DRIVE_CORRECTION_MAX, repr(corrected))
-check("straight integral accumulates against a persistent heading error",
-      robot._drive_integral < 0, repr(robot._drive_integral))
+check("straight integral is disabled to prevent long-run hunting",
+      robot._drive_integral == 0, repr(robot._drive_integral))
 gyro.callback(30.0)
 floor_corrected = duties()
-check("straight correction keeps both wheels above measured breakaway",
-      floor_corrected["A1"] >= robot.get_breakaway()[0]
-      and floor_corrected["B2"] >= robot.get_breakaway()[1],
+check("large forward drift uses one brownout-safe grout recovery wheel",
+      floor_corrected["A1"] == 0
+      and floor_corrected["B2"] == robot.DRIVE_RECOVERY_DUTY
+      and sum(value > 0 for value in floor_corrected.values()) == 1,
       repr(floor_corrected))
+gyro.callback(3.0)
+recovered = duties()
+check("grout recovery exits through a staggered one-wheel rejoin",
+      robot._drive_recovery_sign == 0
+      and robot._launch_until is not None
+      and sum(value > 0 for value in recovered.values()) == 1,
+      repr(recovered))
+robot._launch_until = robot.time.ticks_add(robot.time.ticks_ms(), -1)
+gyro.callback(3.0)
+rejoined = duties()
+check("grout recovery returns to two-wheel drive after stagger",
+      rejoined["A1"] >= robot.get_breakaway()[0]
+      and rejoined["B2"] >= robot.get_breakaway()[1], repr(rejoined))
 robot.stop()
 check("stop releases every motor output", all(value == 0 for value in duties().values()),
       repr(duties()))
@@ -110,9 +129,12 @@ gyro.callback(0.0)
 trimmed_launch = duties()
 check("gyro drive launch uses requested duty instead of a fixed 300 kick",
       max(trimmed_launch.values()) <= 220, repr(trimmed_launch))
-check("gyro drive applies saved wheel trim as feed-forward",
-      trimmed_launch["A1"] == 220 and trimmed_launch["B2"] == 176,
-      repr(trimmed_launch))
+robot._launch_until = robot.time.ticks_add(robot.time.ticks_ms(), -1)
+gyro.callback(0.0)
+trimmed_cruise = duties()
+check("gyro drive applies saved trim as closed-loop feed-forward",
+      trimmed_cruise["A1"] == 220 and trimmed_cruise["B2"] == 176,
+      repr(trimmed_cruise))
 robot.stop()
 robot.set_trim(*saved_trim)
 fakehw.PWM_WRITES[:] = []
@@ -206,6 +228,8 @@ robot._km, robot._kp = saved_km, saved_kp
 print("Backward gyro hold")
 robot.backward_at(300)
 gyro.callback(0.0)
+robot._launch_until = robot.time.ticks_add(robot.time.ticks_ms(), -1)
+gyro.callback(0.0)
 first = duties()
 check("backward uses A2 and B1", first["A2"] > 0 and first["A1"] == 0
       and first["B1"] > 0 and first["B2"] == 0, repr(first))
@@ -213,6 +237,13 @@ gyro.callback(5.0)
 corrected = duties()
 check("reverse positive yaw inverts the wheel correction",
       corrected["A2"] > corrected["B1"], repr(corrected))
+gyro.callback(30.0)
+reverse_recovery = duties()
+check("large reverse drift flips the one-wheel recovery direction",
+      reverse_recovery["A2"] == robot.DRIVE_RECOVERY_DUTY
+      and reverse_recovery["B1"] == 0
+      and sum(value > 0 for value in reverse_recovery.values()) == 1,
+      repr(reverse_recovery))
 
 print("Gyro nudge")
 original_sleep_ms = robot._sleep_ms

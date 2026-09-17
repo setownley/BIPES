@@ -58,7 +58,7 @@ check('OS_TIMER defaults True', r.OS_TIMER is True, repr(r.OS_TIMER))
 check('Timer 0 constructed', ('construct', 0) in fakehw.TIMER_EVENTS)
 check('Timer 0 started', ('init', 0) in fakehw.TIMER_EVENTS)
 check('_tim is live', r._tim is not None)
-check('VERSION is current', r.VERSION == '1.2.51', r.VERSION)
+check('VERSION is current', r.VERSION == '1.2.59', r.VERSION)
 check('SETTINGS_FILE name', r.SETTINGS_FILE == 'robot_settings.txt', r.SETTINGS_FILE)
 
 print('Import with OS_TIMER=1')

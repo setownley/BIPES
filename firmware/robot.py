@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "1.2.51"  # continuous direct arc ends on measured nudge angle
+VERSION = "1.2.59"  # supply-safe grout recovery with staggered rejoin
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -100,13 +100,20 @@ ECHO_TIMEOUT_US = 15000     # max range = 2577 mm; covers requested 2400 mm
 NO_ECHO_MM      = 9999      # clear/open beyond range, or no usable echo
 TOF_MAX_VALID_MM = 2200     # VL53L0X raw reads above this = out-of-range (family ceiling ~2 m)
 PWM_FREQ        = 1000      # Hz — matches bench-tested exploratory firmware
-SPEEDS = {"slow": 220, "medium": 260, "fast": 300}  # distinct, above breakaway, within proven ceiling
-POWER_SAFE_MAX = 300       # motion above this requires a restrained test stand
-DRIVE_CORRECTION_MAX = 500 # one-wheel straight correction; never opposed load
+SPEEDS = {"slow": 350, "medium": 450, "fast": 500}
+POWER_SAFE_MAX = 550       # 600 caused repeatable power-on/brownout resets
+DRIVE_CORRECTION_MAX = 550 # feedback ceiling; ordinary cruise remains lower
+DRIVE_MIN_DUTY = 300       # over twice measured breakaway; no stall/grout drag
+DRIVE_STEER_LIMIT = 75     # bounded correction around cruise; prevents drunken hunting
+DRIVE_RECOVERY_ENTER_DEG = 8.0
+                            # a larger error means one wheel is probably caught
+DRIVE_RECOVERY_EXIT_DEG = 4.0
+                            # hysteresis prevents rapid grip-pulse chatter
+DRIVE_RECOVERY_DUTY = 450   # proven one-wheel launch; 550 browned out in repeats
 CAL_POWER_MAX = 300        # opposite-wheel turn load reset above safe 300 ceiling
-TURN_POWER_MAX = 160       # room scan proved stable here; minimise supply sag/EMI
-TURN_LAUNCH_DUTY = 180     # one wheel at a time, never an opposed-current pulse
-TURN_LAUNCH_MS = 120       # 60 ms per wheel before both settle at the 160 cap
+TURN_POWER_MAX = 300       # faster cruise while retaining useful gyro samples
+TURN_LAUNCH_DUTY = 450     # sequential one-wheel kick climbed out of tile grout
+TURN_LAUNCH_MS = 120       # 60 ms per wheel before both settle at the 300 cap
 TURN_RELAUNCH_ATTEMPTS = 3 # bounded retries when a braked wheel sits in grout
 LEFT_MOTOR = "A"            # which DRV8833 channel drives the LEFT wheel
 FLIP_A = False              # set True if motor A runs backwards for "forward"
@@ -170,17 +177,18 @@ _abort_requested = False
 _launch_until = None
 _spin_relaunch_remaining = 0
 _drive_integral = 0.0
+_drive_recovery_sign = 0    # one-wheel high-grip correction for grout lock
 
 TICK_MS = 100               # sensor sampling period
-RAMP_MS = 200               # soft-start: motor duty ramps to target over this
+RAMP_MS = 60                # short ramp for uncalibrated fallback; avoid stall dwell
 RAMP_STEPS = 10             # ... in this many steps (stop() is always instant)
 BRAKE_MS = 20               # physical IMU tests: 80 ms added up to 6 deg stop yaw
 BRAKE_LEVEL = 1023          # TB6612 IN1=IN2 logic state, not motor drive duty
-LAUNCH_HOLD_MS = 100        # standstill launch: hold at breakaway before ramping
-GRIP_LAUNCH_MS = 80         # heading-held launch, capped at power-safe duty
-DRIVE_STEER_GAIN = 0.75     # repaired drivetrain: no oscillation on tile/grout
-DRIVE_INTEGRAL_GAIN = 30.0  # duty / (degree.second), straight drive only
-DRIVE_INTEGRAL_MAX = 140.0  # anti-windup bound; reset at every movement
+LAUNCH_HOLD_MS = 20         # only enough for PWM/gearbox take-up
+GRIP_LAUNCH_MS = 60         # full-duty stagger; avoids simultaneous motor inrush
+DRIVE_STEER_GAIN = 2.0      # measured: 1x ran away to 39 deg; 2x finished at 3.3
+DRIVE_INTEGRAL_GAIN = 0.0   # integral caused long alternating tile corrections
+DRIVE_INTEGRAL_MAX = 0.0
 CAL_GATE_MS = 3000          # kid self-cal: TAP=CAL window at program start
 CAL_CURV_MM = 20            # p99 sensor-noise floor; resolves trim errors >= ~4%
 CAL_WALL_MIN = 60           # side reading must be inside this band to start
@@ -619,7 +627,7 @@ def _steer_heading(angle):
         PWM   = kP*error + kD*(error - errorOld)
     """
     global _err_old, _last_angle, _base, _launch_until, _braking
-    global _spin_relaunch_remaining, _drive_integral
+    global _spin_relaunch_remaining, _drive_integral, _drive_recovery_sign
 
     if _check_motion_deadline() or not _hold:
         return
@@ -710,7 +718,8 @@ def _steer_heading(angle):
     # coasting. So: predict where it would come to rest and brake once that
     # passes the target.
     if _spin_mode:
-        rate = moved * (1000.0 / LOOP_MS)        # deg/s, from the gyro
+        rate = min(moved * (1000.0 / LOOP_MS), TURN_RATE_MAX)
+                                                   # deg/s, sampling-clamped
         coast = rate * (_tm or 0.18) * BRAKE_LEAD
         if coast > abs(err):
             _braking = True
@@ -720,6 +729,15 @@ def _steer_heading(angle):
 
     launching = (not _spin_mode and _launch_until is not None and
                  time.ticks_diff(_launch_until, time.ticks_ms()) > 0)
+    if launching:
+        remaining = time.ticks_diff(_launch_until, time.ticks_ms())
+        if remaining > (GRIP_LAUNCH_MS * 2) // 3:
+            # Start one wheel at the requested cruise power, not at the slow
+            # breakaway floor. The second wheel joins on the next gyro tick,
+            # so the battery never sees both motor inrush currents together.
+            launch_a = int(_base_target * _trim["A"])
+            _motors_raw(launch_a, _reverse_motion, 0, _reverse_motion)
+            return
     if not _spin_mode and _launch_until is not None and not launching:
         # The launch already used the requested safe drive duty with each
         # wheel's measured breakaway floor. Continue directly rather than
@@ -735,15 +753,13 @@ def _steer_heading(angle):
     diff = _kp * err + _kd * (err - _err_old) * (1000.0 / LOOP_MS)
     if not _spin_mode:
         diff *= DRIVE_STEER_GAIN
-        # PD alone needs a permanent heading error to counter constant wheel
-        # mismatch or grout drag. Accumulate a bounded straight-drive term
-        # so that correction remains while the heading returns to zero.
-        _drive_integral += err * (LOOP_MS / 1000.0) * DRIVE_INTEGRAL_GAIN
-        if _drive_integral > DRIVE_INTEGRAL_MAX:
-            _drive_integral = DRIVE_INTEGRAL_MAX
-        elif _drive_integral < -DRIVE_INTEGRAL_MAX:
-            _drive_integral = -DRIVE_INTEGRAL_MAX
-        diff += _drive_integral
+        # Tile/grout load changes faster than a useful integral can unwind.
+        # Keep correction small and local so the chassis does not alternate
+        # between full-left and full-right arcs on a long run.
+        if diff > DRIVE_STEER_LIMIT:
+            diff = DRIVE_STEER_LIMIT
+        elif diff < -DRIVE_STEER_LIMIT:
+            diff = -DRIVE_STEER_LIMIT
     _err_old = err
 
     moving = moved > 0.4 * (LOOP_MS / 1000.0) * 30
@@ -754,11 +770,9 @@ def _steer_heading(angle):
                 diff += _spin_dead
             elif diff < -1:
                 diff -= _spin_dead
-    else:
-        if diff > 1:
-            diff += _dead
-        elif diff < -1:
-            diff -= _dead
+    # Straight driving deliberately does not add the measured static
+    # deadband. Both wheels already cruise far above it; adding another 118
+    # duty turned small heading errors into violent alternating corrections.
 
     if diff > MAX_DIFF:
         diff = MAX_DIFF
@@ -776,24 +790,52 @@ def _steer_heading(angle):
         # Requested base duty remains safety-clamped. This extra ceiling is
         # available only to feedback on one struggling, same-direction wheel.
         drive_limit = DRIVE_CORRECTION_MAX
-        # Verified on the physical chassis: the required duty differential
-        # reverses with travel direction. Removing this inversion caused
-        # positive feedback and 28.6 degrees of yaw in a 0.4-second test.
+        # The complete installed gyro path was verified physically in both
+        # signs: forward uses diff and reversing flips the steering response.
         correction = -diff if _reverse_motion else diff
-        duty_a = int(min(max(drive_base + correction, 0), drive_limit)
-                     * _trim["A"])
-        duty_b = int(min(max(drive_base - correction, 0), drive_limit)
-                     * _trim["B"])
-        # A heading correction must not slow either wheel below its measured
-        # breakaway. On grout that stops the wheel and turns its gearbox into
-        # a brake, freezing both translation and yaw. Keep both rolling and
-        # put the remaining correction into speeding up the struggling side.
+        # A grout edge can hold one wheel even at the ordinary correction
+        # ceiling.  Continuing to drive the free wheel then creates the long
+        # accelerating curve measured on tile (39 degrees in 0.8 seconds).
+        # Beyond a real heading error, release the wheel making the error
+        # worse and give only the correcting wheel the proven-safe maximum.
+        # One motor at the proven 450 launch duty avoids the opposed-motor
+        # brownout seen at 600, and zero is preferable to dwelling in the
+        # high-current stall band. Exit with hysteresis once straight.
+        leaving_recovery = 0
+        if (_drive_recovery_sign and
+                (abs(err) <= DRIVE_RECOVERY_EXIT_DEG or
+                 _drive_recovery_sign * err <= 0)):
+            leaving_recovery = _drive_recovery_sign
+            _drive_recovery_sign = 0
+            # Rejoin the second wheel through the ordinary staggered launch;
+            # jumping from one hard-working wheel to both caused a measured
+            # supply reset on the physical robot.
+            _launch_until = time.ticks_add(time.ticks_ms(), GRIP_LAUNCH_MS)
+        elif not _drive_recovery_sign and abs(err) >= DRIVE_RECOVERY_ENTER_DEG:
+            _drive_recovery_sign = 1 if err > 0 else -1
+        active_recovery = _drive_recovery_sign or leaving_recovery
+        if active_recovery:
+            recovery = (-active_recovery if _reverse_motion
+                        else active_recovery)
+            if recovery > 0:
+                _motors_raw(DRIVE_RECOVERY_DUTY, _reverse_motion,
+                            0, _reverse_motion)
+            else:
+                _motors_raw(0, _reverse_motion,
+                            DRIVE_RECOVERY_DUTY, _reverse_motion)
+            return
+        base_a = drive_base * _trim["A"]
+        base_b = drive_base * _trim["B"]
+        duty_a = int(min(max(base_a + correction, 0), drive_limit))
+        duty_b = int(min(max(base_b - correction, 0), drive_limit))
+        # A correction may reduce the dominant wheel, but never back into the
+        # slow high-current/stall region that caused BLE loss on grout.
+        floor_a = min(base_a, DRIVE_MIN_DUTY)
+        floor_b = min(base_b, DRIVE_MIN_DUTY)
         if duty_a:
-            duty_a = min(drive_limit,
-                         max(duty_a, _breakaway["A"] or duty_a))
+            duty_a = min(drive_limit, max(duty_a, floor_a))
         if duty_b:
-            duty_b = min(drive_limit,
-                         max(duty_b, _breakaway["B"] or duty_b))
+            duty_b = min(drive_limit, max(duty_b, floor_b))
         _motors_raw(duty_a, _reverse_motion,
                     duty_b, _reverse_motion)
 
@@ -812,7 +854,7 @@ def _hold_on(target, base, spin, reverse=False):
     global _hold, _target, _base, _base_target, _reverse_motion
     global _err_old, _spin_mode, _last_angle, _braking
     global _gyro_bus_lock, _launch_until, _spin_relaunch_remaining
-    global _drive_integral
+    global _drive_integral, _drive_recovery_sign
     import gyro
     if gyro._gyro is None:
         # Bias calibration assumes zero angular velocity. A preceding
@@ -849,16 +891,19 @@ def _hold_on(target, base, spin, reverse=False):
         time.ticks_ms(), TURN_LAUNCH_MS if spin else GRIP_LAUNCH_MS)
     _spin_relaunch_remaining = TURN_RELAUNCH_ATTEMPTS if spin else 0
     _drive_integral = 0.0
+    _drive_recovery_sign = 0
     _hold = True
     gyro.gyro_callback(_steer_heading)
 
 
 def _hold_off():
     global _hold, _launch_until, _braking, _spin_relaunch_remaining
+    global _drive_recovery_sign
     _hold = False
     _braking = False
     _launch_until = None
     _spin_relaunch_remaining = 0
+    _drive_recovery_sign = 0
     try:
         import gyro
         # Stopping must never initialise/calibrate a gyro or construct a
