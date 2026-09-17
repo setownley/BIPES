@@ -40,4 +40,9 @@ old_nested = [value.co_code for value in legacy.find_port.__code__.co_consts
               if hasattr(value, "co_code")]
 assert new_nested == old_nested
 
+with open(PATH, encoding="utf-8") as source:
+    provision_source = source.read()
+assert "all(v==0 for v in p.values())" in provision_source
+assert "lines[-1] != \"MOTORS_ZERO\"" in provision_source
+
 print("provision_devlink tests passed")

@@ -101,12 +101,14 @@ def provision(port):
     out = run([sys.executable, "-m", "mpremote", "connect", port, "exec",
                "import robot,gyro,devlink_server; "
                "print(robot.VERSION,gyro.VERSION,devlink_server.VERSION); "
-               "print({n:p.duty() for n,p in robot._pwm.items()})"])
+               "p={n:c.duty() for n,c in robot._pwm.items()}; print(p); "
+               "print('MOTORS_ZERO' if all(v==0 for v in p.values()) "
+               "else 'MOTORS_NOT_ZERO')"])
     lines = [line.strip() for line in out.splitlines() if line.strip()]
-    if not lines or not lines[-1].endswith("'B2': 0}"):
+    if not lines or lines[-1] != "MOTORS_ZERO":
         raise RuntimeError("runtime imported but motor outputs were not zero: " + out)
-    print("      runtime:", lines[-2])
-    print("      motors:", lines[-1])
+    print("      runtime:", lines[-3])
+    print("      motors:", lines[-2])
     return True
 
 
