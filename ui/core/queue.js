@@ -460,9 +460,8 @@ window.addEventListener('load', function () {
     /* ---- drive at an exact duty -------------------------------------------
      * forward()'s three named speeds (slow/medium/fast) are enough for most
      * lessons; this is for students exploring what duty itself does. Goes
-     * through robot.forward_at(), which still runs through the same
-     * _motors()/soft-start path as forward() - trim and the launch-floor
-     * ramp both still apply.
+     * through robot.forward_at(), which uses the same trim, staggered launch,
+     * gyro heading hold and grout recovery as the named-speed block.
      */
     Blockly.Blocks['robot_forward_at'] = {
         init: function() {
@@ -474,10 +473,10 @@ window.addEventListener('load', function () {
                     ['backward', 'backward']
                 ]), 'DIR')
                 .appendField('at')
-                .appendField(new Blockly.FieldNumber(300, 0, 300, 1), 'DUTY');
+                .appendField(new Blockly.FieldNumber(450, 0, 550, 1), 'DUTY');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Drive forward or backward at an exact safe duty from 0 to 300. Gyro steering keeps the robot on its heading after motor calibration.');
+            this.setTooltip('Drive forward or backward at an exact safe duty from 0 to 550. Uses the calibrated trim, gyro heading hold and grout recovery.');
         }
     };
 

@@ -11899,7 +11899,7 @@ Blockly.Blocks['robot_stop'] = {
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour("#FFD400");
-    this.setTooltip("Stop all motors (coast).");
+    this.setTooltip("Brake briefly, then release both motors safely.");
   }
 };
  
@@ -12000,7 +12000,7 @@ Blockly.Blocks['robot_turn90'] = {
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour("#FFD400");
-    this.setTooltip("Spin exactly 90 degrees using the calibrated turn time.");
+    this.setTooltip("Spin 90 degrees using the gyro and calibrated controller.");
   }
 };
 

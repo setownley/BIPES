@@ -22,8 +22,9 @@ assert "robot.stop()" in compatibility_block
 exact_start = source.index("Blockly.Blocks['robot_forward_at']")
 exact_end = source.index("/* ---- DevLink data", exact_start)
 exact_block = source[exact_start:exact_end]
-assert "FieldNumber(300, 0, 300" in exact_block
+assert "FieldNumber(450, 0, 550" in exact_block
 assert "backward_at" in exact_block
+assert "grout recovery" in exact_block
 
 gyro_start = source.index("Blockly.Blocks['gyro_calibrate']")
 gyro_end = source.index("var MMCAL_SRC", gyro_start)
