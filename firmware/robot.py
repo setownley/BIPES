@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "1.2.61"  # consistent in-place calibration clearance guard
+VERSION = "1.2.62"  # distinguish pivot clearance from in-place spin clearance
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -112,6 +112,7 @@ DRIVE_RECOVERY_EXIT_DEG = 4.0
 DRIVE_RECOVERY_DUTY = 450   # proven one-wheel launch; 550 browned out in repeats
 CAL_POWER_MAX = POWER_SAFE_MAX  # calibration may probe the full hardware-safe range
 CAL_CLEARANCE_MM = 160     # sensor-to-wall room for an in-place pivot plus margin
+CAL_SPIN_CLEARANCE_MM = 30 # a spin faces walls but does not drive toward them
 TURN_POWER_MAX = 300       # faster cruise while retaining useful gyro samples
 TURN_LAUNCH_DUTY = 450     # sequential one-wheel kick climbed out of tile grout
 TURN_LAUNCH_MS = 120       # 60 ms per wheel before both settle at the 300 cap
@@ -1956,7 +1957,7 @@ def _spin_rate_one(duty, ms, direction):
     import gyro
     rates = []
     try:
-        _cal_guard_clearance()
+        _cal_guard_clearance(CAL_SPIN_CLEARANCE_MM)
         if direction > 0:
             _motors_raw(duty, False, duty, True)
         else:
@@ -1971,7 +1972,7 @@ def _spin_rate_one(duty, ms, direction):
             rates.append(abs(angle - last) * (1000.0 / LOOP_MS))
             last = angle
             if len(rates) % 5 == 0:
-                _cal_guard_clearance()
+                _cal_guard_clearance(CAL_SPIN_CLEARANCE_MM)
     finally:
         stop()
     _sleep_ms(SETTLE_MS)
@@ -2008,7 +2009,7 @@ def _measure_tm_one(duty, direction):
     last = 0.0
     t0 = time.ticks_ms()
     try:
-        _cal_guard_clearance()
+        _cal_guard_clearance(CAL_SPIN_CLEARANCE_MM)
         if direction > 0:
             _motors_raw(duty, False, duty, True)
         else:
@@ -2020,7 +2021,7 @@ def _measure_tm_one(duty, direction):
                           abs(a - last) * (1000.0 / LOOP_MS)))
             last = a
             if len(rates) % 5 == 0:
-                _cal_guard_clearance()
+                _cal_guard_clearance(CAL_SPIN_CLEARANCE_MM)
     finally:
         stop()
     _sleep_ms(300)
@@ -2074,7 +2075,7 @@ def _validate_characterisation(trim_candidate=None):
     corrections = []
     requested = 30.0
     for index in range(3):
-        _cal_guard_clearance()
+        _cal_guard_clearance(CAL_SPIN_CLEARANCE_MM)
         _cal_show("validating", "%d of 3" % (index + 1), "left/right")
         left = float(turn_degrees("left", requested))
         _sleep_ms(200)
@@ -2095,7 +2096,7 @@ def _validate_characterisation(trim_candidate=None):
          % (previous_bias, adjustment, candidate))
 
     # Independently confirm the proposed bias before it reaches flash.
-    _cal_guard_clearance()
+    _cal_guard_clearance(CAL_SPIN_CLEARANCE_MM)
     left = float(turn_degrees("left", requested))
     _sleep_ms(200)
     right = float(turn_degrees("right", requested))
@@ -2192,9 +2193,19 @@ def _characterise(verbose=True, force_starts=False):
     stop()
     _timer_stop()       # the dashboard would wipe every message
 
-    # Do not reposition the sensor here. Calibration must not surprise a
-    # student by moving a newly mounted servo; point it ahead beforehand.
-    _cal_guard_clearance(250)
+    state = _load_cal_state()
+    saved_starts = state.get("starts")
+    resumes_with_spins = (isinstance(saved_starts, dict) and
+                          saved_starts.get("A") is not None and
+                          saved_starts.get("B") is not None)
+    # Fresh single-wheel breakaway tests pivot about one wheel and need room.
+    # A resumed sweep (or validation of an installed calibration) only spins
+    # in place, so a forward reading from a wall it happens to face is not a
+    # reason to discard the checkpoint.
+    if resumes_with_spins or (calibrated() and not force_starts):
+        _cal_guard_clearance(CAL_SPIN_CLEARANCE_MM)
+    else:
+        _cal_guard_clearance(250)
 
     try:
         with open(CAL_LOG, "w") as f:
@@ -2211,7 +2222,6 @@ def _characterise(verbose=True, force_starts=False):
     _gyro_bus_lock = gyro.gyro_bus()
     _sleep_ms(800)
 
-    state = _load_cal_state()
     if calibrated() and not force_starts and not state:
         health = _verify_motor_health()
         if health is None:

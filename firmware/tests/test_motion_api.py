@@ -368,6 +368,10 @@ check("no echo is treated as open space",
       robot._cal_guard_clearance() == robot.NO_ECHO_MM)
 check("in-place calibration uses the documented clearance floor",
       robot.CAL_CLEARANCE_MM == 160, robot.CAL_CLEARANCE_MM)
+check("pure spins only stop at actual collision clearance",
+      robot.CAL_SPIN_CLEARANCE_MM == 30
+      and robot.CAL_SPIN_CLEARANCE_MM < robot.CAL_CLEARANCE_MM,
+      robot.CAL_SPIN_CLEARANCE_MM)
 original_wheel_rate = robot._wheel_rate
 health_rates = {("A", False): 380.0, ("A", True): 340.0,
                 ("B", False): 310.0, ("B", True): 315.0}
