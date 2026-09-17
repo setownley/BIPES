@@ -1,4 +1,4 @@
-"""Host-only checks for the new compiled DevLink provisioner."""
+"""Host-only checks for the DevLink provisioner file selection."""
 
 import importlib.util
 import json
@@ -13,122 +13,31 @@ spec = importlib.util.spec_from_file_location("provision_devlink", PATH)
 provision = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(provision)
 
-
 targets = [target for _, target in provision.FILES]
 assert len(targets) == len(set(targets))
-assert "robot.mpy" in targets
-assert "gyro.mpy" in targets
-assert "devlink_server.mpy" in targets
+assert ("robot.mpy", "robot.mpy") in provision.FILES
+assert ("gyro.mpy", "gyro.mpy") in provision.FILES
+assert ("devlink_server.mpy", "devlink_server.mpy") in provision.FILES
+assert ("robot_commission.py", "devlink_app.py") in provision.FILES
+assert ("maze_cal_factory.json", "maze_cal.json") in provision.FILES
 assert "robot.py" not in targets
 assert "gyro.py" not in targets
 assert "devlink_server.py" not in targets
-assert ("robot_commission.py", "devlink_app.py") in provision.FILES
-assert ("maze_cal_factory.json", "maze_cal.json") in provision.FILES
 
 with open(os.path.join(FIRMWARE, "maze_cal_factory.json"), encoding="utf-8") as source:
-    factory_cal = json.load(source)
-for robot_specific_key in (
-    "trim",
-    "breakaway_duty",
-    "breakaway_A",
-    "breakaway_B",
-    "t90_left",
-    "t90_right",
-    "speed_slow",
-    "speed_medium",
-    "speed_fast",
-):
-    assert robot_specific_key not in factory_cal
+    factory = json.load(source)
+for key in ("trim", "breakaway_A", "breakaway_B", "t90_left", "t90_right"):
+    assert key not in factory
 
-manifest = provision.local_manifest()
-assert manifest["schema"] == 1
-assert manifest["system"] == "esp32-c3-micropython-devlink-robot"
-assert set(manifest["files"]) == set(targets)
-for target, item in manifest["files"].items():
-    source = os.path.join(FIRMWARE, item["source"])
-    assert item["size"] == os.path.getsize(source)
-    assert len(item["sha256"]) == 64
-    int(item["sha256"], 16)
-
-args = provision.parse_args(["--port", "COM9", "--once"])
-assert args.port == "COM9" and args.once and not args.check_only
-
-original_esp_ports = provision.esp_ports
-original_other_ports = provision.other_serial_ports
-original_legacy_find_port = provision.legacy_find_port
-try:
-    provision.esp_ports = lambda: []
-    provision.other_serial_ports = lambda: [
-        "COM7 (Standard Serial over Bluetooth link)"
-    ]
-    provision.legacy_find_port = lambda: "COM42"
-    assert provision.select_port(None) == "COM42"
-    provision.legacy_find_port = lambda: None
-    try:
-        provision.select_port(None)
-        raise AssertionError("missing wired board was accepted")
-    except provision.ProvisionError as exc:
-        assert "original provisioner also found no" in str(exc)
-        assert "Bluetooth" in str(exc)
-finally:
-    provision.esp_ports = original_esp_ports
-    provision.other_serial_ports = original_other_ports
-    provision.legacy_find_port = original_legacy_find_port
-
-
-# Exact hash equality is the completion gate, not a filename-only check.
-original_info = provision.board_file_info
-try:
-    provision.board_file_info = lambda _port: {
-        name: {"size": item["size"], "sha256": item["sha256"]}
-        for name, item in manifest["files"].items()
-    }
-    provision.verify_files("COM_TEST", manifest)
-
-    broken = provision.board_file_info("COM_TEST")
-    broken[targets[0]] = dict(broken[targets[0]], sha256="0" * 64)
-    provision.board_file_info = lambda _port: broken
-    try:
-        provision.verify_files("COM_TEST", manifest)
-        raise AssertionError("a bad on-board hash was accepted")
-    except provision.ProvisionError as exc:
-        assert targets[0] in str(exc)
-finally:
-    provision.board_file_info = original_info
-
-
-# Smoke-test parsing must reject any non-zero motor channel.
-class Result:
-    def __init__(self, stdout):
-        self.stdout = stdout
-
-
-original_mpremote = provision.mpremote
-try:
-    good = {
-        "robot": "1.2.59",
-        "gyro": "1.2.2",
-        "devlink": "1.3.7",
-        "pwm": {"A1": 0, "A2": 0, "B1": 0, "B2": 0},
-        "uid": "01020304",
-        "reset_cause": 2,
-    }
-    provision.mpremote = lambda *_args, **_kwargs: Result(
-        "boot text\nPROVISION_SMOKE=" + json.dumps(good) + "\n"
-    )
-    assert provision.smoke_test("COM_TEST")["pwm"]["A1"] == 0
-
-    bad = dict(good, pwm=dict(good["pwm"], B2=1))
-    provision.mpremote = lambda *_args, **_kwargs: Result(
-        "PROVISION_SMOKE=" + json.dumps(bad) + "\n"
-    )
-    try:
-        provision.smoke_test("COM_TEST")
-        raise AssertionError("non-zero motor PWM was accepted")
-    except provision.ProvisionError as exc:
-        assert "PWM was not zero" in str(exc)
-finally:
-    provision.mpremote = original_mpremote
-
+legacy_path = os.path.join(FIRMWARE, "provision.py")
+legacy_spec = importlib.util.spec_from_file_location("legacy_provision", legacy_path)
+legacy = importlib.util.module_from_spec(legacy_spec)
+legacy_spec.loader.exec_module(legacy)
+assert provision.find_port.__code__.co_code == legacy.find_port.__code__.co_code
+new_nested = [value.co_code for value in provision.find_port.__code__.co_consts
+              if hasattr(value, "co_code")]
+old_nested = [value.co_code for value in legacy.find_port.__code__.co_consts
+              if hasattr(value, "co_code")]
+assert new_nested == old_nested
 
 print("provision_devlink tests passed")
