@@ -490,7 +490,18 @@ window.addEventListener('load', function () {
 
     Blockly.Python['robot_stop_if_close'] = function(block) {
         Blockly.Python.definitions_['import_robot'] = 'import robot';
-        return ['robot.stop_if_close(' + block.getFieldValue('MM') + ')',
+        // Keep this classroom logic block compatible with already-calibrated
+        // robots that predate robot.stop_if_close().  distance_mm() is the
+        // cached value maintained by the Robot OS Timer 0, so this does not
+        // compete with the timer for the ultrasonic pins.
+        Blockly.Python.definitions_['robot_stop_if_close_compat'] =
+            'def _bipes_stop_if_close(distance):\n' +
+            '    reading = robot.distance_mm()\n' +
+            '    if reading != 9999 and reading < distance:\n' +
+            '        robot.stop()\n' +
+            '        return True\n' +
+            '    return False';
+        return ['_bipes_stop_if_close(' + block.getFieldValue('MM') + ')',
                 Blockly.Python.ORDER_FUNCTION_CALL];
     };
 
