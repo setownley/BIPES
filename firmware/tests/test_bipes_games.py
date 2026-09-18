@@ -1,4 +1,4 @@
-"""Static checks for the BIPES Games toolbox and embedded Frogger source."""
+"""Static checks for the BIPES Games toolbox and embedded game sources."""
 
 import json
 from pathlib import Path
@@ -12,6 +12,7 @@ assert "play_invaders_standalone" in menu_line
 assert "play_snake_standalone" in menu_line
 assert "play_defender_standalone" in menu_line
 assert "play_frogger_standalone" in menu_line
+assert "play_pacman_standalone" in menu_line
 assert "'play_invaders'," not in menu_line
 assert "'play_snake'," not in menu_line
 assert "'play_defender'," not in menu_line
@@ -20,20 +21,26 @@ assert "var retiredGameBlocks = ['play_invaders', 'play_snake', 'play_defender']
 assert "oldBlocks[ob].parentNode.removeChild(oldBlocks[ob]);" in source
 assert "appendField('Frogger')" in source
 assert 'media/frogger.svg' in source
+assert "appendField('Pacman')" in source
+assert 'media/pacman.svg' in source
 
-start = source.index("    var FROGGER_SRC = [")
-start = source.index("\n", start) + 1
-end = source.index("    ].join('\\n');", start)
-frogger_lines = []
-for line in source[start:end].splitlines():
-    encoded = line.strip()
-    if encoded.endswith(","):
-        encoded = encoded[:-1]
-    frogger_lines.append(json.loads(encoded))
+def embedded_python(name):
+    start = source.index("    var %s_SRC = [" % name.upper())
+    start = source.index("\n", start) + 1
+    end = source.index("    ].join('\\n');", start)
+    lines = []
+    for line in source[start:end].splitlines():
+        encoded = line.strip()
+        if encoded.endswith(","):
+            encoded = encoded[:-1]
+        lines.append(json.loads(encoded))
+    return "\n".join(lines)
 
-frogger_source = "\n".join(frogger_lines)
-compile(frogger_source, "frogger-generated.py", "exec")
-assert frogger_source.startswith("def _play_frogger(")
-assert "Game(oled, btn, x0, y0, led).run()" in frogger_source
+
+for game in ("frogger", "pacman"):
+    generated = embedded_python(game)
+    compile(generated, "%s-generated.py" % game, "exec")
+    assert generated.startswith("def _play_%s(" % game)
+    assert "Game(oled, btn, x0, y0, led).run()" in generated
 
 print("ALL PASS")
