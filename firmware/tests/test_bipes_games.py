@@ -43,4 +43,8 @@ for game in ("frogger", "pacman"):
     assert generated.startswith("def _play_%s(" % game)
     assert "Game(oled, btn, x0, y0, led).run()" in generated
 
+pacman_source = embedded_python("pacman")
+assert 'help_text = "TAP=L  2TAP=R  HOLD=U  2HOLD=D   "' in pacman_source
+assert "scroll = (scroll + 2) % (W + help_width)" in pacman_source
+
 print("ALL PASS")
