@@ -7,7 +7,7 @@
 <block type="robot_stop"></block>
 <block type="robot_backward"></block>
 <block type="robot_turn"></block>
-<block type="robot_drive_until_distance"></block>
+<block type="robot_stop_if_close"></block>
 <block type="robot_wait">
 		  <value name="TIME"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
 		</block>
@@ -27,7 +27,6 @@
 <block type="robot_look"></block>
 <block type="robot_servo_off"></block>
 <block type="robot_ping"></block>
-<block type="robot_stop_if_close"></block>
 <block type="robot_stopped_by_distance"></block>
 <block type="robot_distance_guard_off"></block>
 
@@ -3440,7 +3439,6 @@ _
 </category>
 </category>
 </document>
-
 
 
 
