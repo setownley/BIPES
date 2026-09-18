@@ -58,7 +58,7 @@ check('OS_TIMER defaults True', r.OS_TIMER is True, repr(r.OS_TIMER))
 check('Timer 0 constructed', ('construct', 0) in fakehw.TIMER_EVENTS)
 check('Timer 0 started', ('init', 0) in fakehw.TIMER_EVENTS)
 check('_tim is live', r._tim is not None)
-check('VERSION is current', r.VERSION == '1.2.62', r.VERSION)
+check('VERSION is current', r.VERSION == '1.2.67', r.VERSION)
 check('SETTINGS_FILE name', r.SETTINGS_FILE == 'robot_settings.txt', r.SETTINGS_FILE)
 
 print('Import with OS_TIMER=1')
@@ -76,7 +76,9 @@ check('no timer init at all', inits() == [], repr(fakehw.TIMER_EVENTS))
 check('_tim is None', r._tim is None)
 check('public API intact', all(hasattr(r, n) for n in
       ('forward', 'forward_at', 'backward', 'backward_at', 'turn_degrees',
-       'nudge', 'stop', 'distance_mm', 'show', 'os_timer', 'apply_settings')))
+       'nudge', 'stop', 'distance_mm', 'stop_if_close',
+       'stopped_by_distance', 'distance_guard_off',
+       'show', 'os_timer', 'apply_settings')))
 
 print('Malformed / hostile settings files all fall back to timer ON')
 for bad in ('OS_TIMER=banana\n', 'OS_TIMER=\n', '\n', 'garbage\n',

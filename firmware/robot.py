@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "1.2.62"  # distinguish pivot clearance from in-place spin clearance
+VERSION = "1.2.67"  # asynchronous forward ultrasonic stopping guard
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -98,6 +98,10 @@ SERVO_RIGHT = 0
 # Teacher tuning knobs -------------------------------------------------------
 ECHO_TIMEOUT_US = 15000     # max range = 2577 mm; covers requested 2400 mm
 NO_ECHO_MM      = 9999      # clear/open beyond range, or no usable echo
+DISTANCE_GUARD_MIN_MM = 20
+DISTANCE_GUARD_MAX_MM = 2400
+DISTANCE_GUARD_HYST_MM = 20
+DISTANCE_GUARD_CLEAR_SAMPLES = 2
 TOF_MAX_VALID_MM = 2200     # VL53L0X raw reads above this = out-of-range (family ceiling ~2 m)
 PWM_FREQ        = 1000      # Hz — matches bench-tested exploratory firmware
 SPEEDS = {"slow": 350, "medium": 450, "fast": 500}
@@ -110,7 +114,8 @@ DRIVE_RECOVERY_ENTER_DEG = 8.0
 DRIVE_RECOVERY_EXIT_DEG = 4.0
                             # hysteresis prevents rapid grip-pulse chatter
 DRIVE_RECOVERY_DUTY = 450   # proven one-wheel launch; 550 browned out in repeats
-CAL_POWER_MAX = POWER_SAFE_MAX  # calibration may probe the full hardware-safe range
+BREAKAWAY_POWER_MAX = POWER_SAFE_MAX  # one driven wheel may use the full safe range
+CAL_POWER_MAX = POWER_SAFE_MAX  # deliberate worst-case capacitor validation build
 CAL_CLEARANCE_MM = 160     # sensor-to-wall room for an in-place pivot plus margin
 CAL_SPIN_CLEARANCE_MM = 30 # a spin faces walls but does not drive toward them
 TURN_POWER_MAX = 300       # faster cruise while retaining useful gyro samples
@@ -286,6 +291,11 @@ _tick = 0
 _student_text = ""
 _cal_line = None
 _cal_floor = None
+_distance_guard_mm = 0
+_distance_guard_blocked = False
+_distance_guard_stopped = False
+_distance_guard_clear_count = 0
+_motion_direction = 0       # 1 forward, -1 backward, 0 stopped/turning
 
 _trim = {"A": 1.0, "B": 1.0}   # duty scale per motor channel, 0.5-1.0
 
@@ -413,6 +423,55 @@ def _repaint():
         _oled.text(_student_text, OLED_X0, OLED_Y0 + 24)              # row 4
     _oled.show()
 
+def _distance_guard_step(reading):
+    """Apply one fresh ultrasonic sample to the forward-only safety guard.
+
+    Called directly from Timer 0, so the stop path is allocation-free and
+    never sleeps, imports, brakes, or touches I2C. Two clear samples plus
+    hysteresis release the latch; one close sample is enough to stop.
+    """
+    global _distance_guard_blocked, _distance_guard_stopped
+    global _distance_guard_clear_count, _motion_direction, _hold
+    global _launch_until, _braking, _spin_relaunch_remaining
+    global _drive_recovery_sign, _motion_deadline
+    if _distance_guard_mm <= 0:
+        _distance_guard_blocked = False
+        _distance_guard_stopped = False
+        _distance_guard_clear_count = 0
+        return False
+
+    if reading >= 0 and reading < _distance_guard_mm:
+        _distance_guard_blocked = True
+        _distance_guard_clear_count = 0
+    elif _distance_guard_blocked:
+        clear = (reading < 0 or
+                 reading >= _distance_guard_mm + DISTANCE_GUARD_HYST_MM)
+        if clear:
+            _distance_guard_clear_count += 1
+            if _distance_guard_clear_count >= DISTANCE_GUARD_CLEAR_SAMPLES:
+                _distance_guard_blocked = False
+                _distance_guard_stopped = False
+                _distance_guard_clear_count = 0
+        else:
+            _distance_guard_clear_count = 0
+
+    if not _distance_guard_blocked or _motion_direction != 1:
+        return False
+
+    # Do not call stop(): Timer callbacks must not sleep or run the braking
+    # sequence. Dropping all PWM immediately is the safest callback path.
+    _hold = False
+    _launch_until = None
+    _braking = False
+    _spin_relaunch_remaining = 0
+    _drive_recovery_sign = 0
+    _motion_deadline = None
+    _motion_direction = 0
+    for channel in _pwm.values():
+        channel.duty(0)
+    _distance_guard_stopped = True
+    return True
+
 def _tick_cb(t):
     # KEEP SHORT. No sleeps. Worst case per tick (calculated, not measured):
     # 15 ms no-echo timeout + ~25 ms OLED repaint = ~40 ms inside 100 ms.
@@ -420,7 +479,9 @@ def _tick_cb(t):
     if _check_motion_deadline():
         return
     if not _ping_busy:
-        _dist_mm = _filter_ultrasonic(_read_ultrasonic_mm())
+        raw_distance = _read_ultrasonic_mm()
+        _dist_mm = _filter_ultrasonic(raw_distance)
+        _distance_guard_step(raw_distance)
     _qre_raw = _read_qre_avg(5)
     # The gyro samples the same physical I2C peripheral from Timer 1. Claim
     # its cooperative lock across every ToF/OLED transaction so one timer
@@ -952,56 +1013,76 @@ def forward(speed="medium"):
     block still works. Uncalibrated it falls back to the old open-loop
     behaviour rather than driving on meaningless gains.
     """
-    global _cur_speed
+    global _cur_speed, _motion_direction
     _cur_speed = speed
+    if not _distance_guard_forward_allowed():
+        return False
     d = _speed(speed)
     if not calibrated():
+        _motion_direction = 1
         d = min(d, POWER_SAFE_MAX)
         _motors(d, False, d, False)
-        return
+        return True
     _hold_on(0.0, d, spin=False, reverse=False)
+    _motion_direction = 1
+    return True
 
 def forward_at(duty):
     """Drive forward at a clamped duty using the same gyro hold as forward."""
+    global _motion_direction
     try:
         d = int(duty)
     except (TypeError, ValueError):
-        return
+        return False
     d = min(max(d, 0), POWER_SAFE_MAX)
+    if not _distance_guard_forward_allowed():
+        return False
     if not calibrated():
+        _motion_direction = 1 if d else 0
         _motors(d, False, d, False)
-        return
+        return True
     _hold_on(0.0, d, spin=False, reverse=False)
+    _motion_direction = 1 if d else 0
+    return True
 
 def backward(speed="medium"):
     """Drive backward while holding the heading it started on."""
-    global _cur_speed
+    global _cur_speed, _motion_direction
     _cur_speed = speed
     d = _speed(speed)
     if not calibrated():
+        _motion_direction = -1
         d = min(d, POWER_SAFE_MAX)
         _motors(d, True, d, True)
-        return
+        return True
     _hold_on(0.0, d, spin=False, reverse=True)
+    _motion_direction = -1
+    return True
 
 def backward_at(duty):
     """Drive backward at a clamped duty with gyro heading hold."""
+    global _motion_direction
     try:
         d = int(duty)
     except (TypeError, ValueError):
-        return
+        return False
     d = min(max(d, 0), POWER_SAFE_MAX)
     if not calibrated():
+        _motion_direction = -1 if d else 0
         _motors(d, True, d, True)
-        return
+        return True
     _hold_on(0.0, d, spin=False, reverse=True)
+    _motion_direction = -1 if d else 0
+    return True
 
 def turn(direction="left"):
     # spin turn in place at medium speed.
     # Releases the heading loop first: without it a forward() earlier in the
     # program leaves the gyro steering in the background and fights this,
     # and the robot spins away instead of stopping.
+    global _motion_direction
     _hold_off()
+    _motion_direction = 0
     d = min(_speed("medium"), POWER_SAFE_MAX)
     if str(direction).lower() == "left":
         left_rev, right_rev = True, False
@@ -1013,6 +1094,8 @@ def turn(direction="left"):
         _motors(d, right_rev, d, left_rev)
 
 def stop():
+    global _motion_direction
+    _motion_direction = 0
     was_active = _hold or any(p.duty() for p in _pwm.values())
     _clear_motion_deadline()
     # Release the heading loop BEFORE braking, or it sees the robot stop,
@@ -1039,9 +1122,10 @@ def emergency_stop():
     The latch prevents later statements in the same synchronous block program
     from restarting PWM. It is cleared only when DevLink starts a new run.
     """
-    global _abort_requested, _hold
+    global _abort_requested, _hold, _motion_direction
     _abort_requested = True
     _hold = False
+    _motion_direction = 0
     _clear_motion_deadline()
     for p in _pwm.values():
         p.duty(0)
@@ -1062,6 +1146,45 @@ def wait(seconds):
         part = min(remaining_ms, 20)
         _sleep_ms(part)
         remaining_ms -= part
+
+def _distance_guard_forward_allowed():
+    """Return False and latch the status when forward travel is unsafe."""
+    global _distance_guard_stopped, _motion_direction
+    if _distance_guard_mm > 0 and _distance_guard_blocked:
+        _distance_guard_stopped = True
+        _motion_direction = 0
+        for channel in _pwm.values():
+            channel.duty(0)
+        return False
+    _distance_guard_stopped = False
+    return True
+
+def stop_if_close(distance=200):
+    """Enable/update the OS forward guard and return its stopped status."""
+    global _distance_guard_mm, _distance_guard_clear_count
+    try:
+        limit = int(distance)
+    except (TypeError, ValueError):
+        limit = 200
+    _distance_guard_mm = min(max(limit, DISTANCE_GUARD_MIN_MM),
+                             DISTANCE_GUARD_MAX_MM)
+    _distance_guard_clear_count = 0
+    _distance_guard_step(_dist_mm)
+    return bool(_distance_guard_stopped)
+
+def stopped_by_distance():
+    """True while the ultrasonic guard is holding forward motion stopped."""
+    return bool(_distance_guard_stopped)
+
+def distance_guard_off():
+    """Disable the ultrasonic guard without starting or stopping any motion."""
+    global _distance_guard_mm, _distance_guard_blocked
+    global _distance_guard_stopped, _distance_guard_clear_count
+    _distance_guard_mm = 0
+    _distance_guard_blocked = False
+    _distance_guard_stopped = False
+    _distance_guard_clear_count = 0
+    return False
 
 def distance_mm():
     return _dist_mm if _dist_mm >= 0 else NO_ECHO_MM
@@ -1504,7 +1627,8 @@ def _set_drive(duty_a, duty_b, reverse=False):
     """Direct two-wheel drive used for a continuous approximate nudge."""
     duty_a = min(max(int(duty_a), 0), POWER_SAFE_MAX)
     duty_b = min(max(int(duty_b), 0), POWER_SAFE_MAX)
-    if _abort_requested:
+    if ((not reverse and (duty_a or duty_b)
+            and not _distance_guard_forward_allowed()) or _abort_requested):
         duty_a = duty_b = 0
     if (duty_a or duty_b) and _motion_deadline is None:
         _arm_motion_deadline()
@@ -1678,9 +1802,12 @@ def shutdown():
 CAL_LOG    = "cal_log.txt"
 CAL_STATE_FILE = "mmcal_work.json"
 CAL_STATE_VERSION = 2
-BREAKAWAY_PROBES = (120, 180, 240, 300, 360, 420, 480, 540, POWER_SAFE_MAX)
+BREAKAWAY_PROBES = (120, 180, 240, 300, 360, 420, 480, 540,
+                    BREAKAWAY_POWER_MAX)
 CAL_HEALTH_DUTY = 300
 CAL_HEALTH_RATE_MIN = 15.0
+CAL_WHEEL_NET_MIN_DEG = 6.0
+CAL_WHEEL_COHERENCE_MIN = 0.60
 PROBE_MS   = 300
 SPIN_MS    = 450
 SETTLE_MS  = 250
@@ -1798,15 +1925,17 @@ def _cal_guard_clearance(minimum_mm=CAL_CLEARANCE_MM):
 
 
 def _wheel_rate(ch, duty, reverse=False, brake_other=True):
-    """Measure one wheel at one duty and in one direction.
+    """Measure signed net yaw from one wheel in one direction.
 
     Loaded breakaway measurements may brake the opposite wheel. Simple motor
     health checks must coast it: a sustained loaded pivot can trip the driver
     channel and make a healthy motor appear dead until power is removed.
+
+    Net signed rotation is mandatory. Summing absolute sample-to-sample gyro
+    changes mistakes motor buzz and chassis vibration for wheel movement.
     """
     import gyro
-    rates = []
-    duty = min(max(int(duty), 0), CAL_POWER_MAX)
+    duty = min(max(int(duty), 0), BREAKAWAY_POWER_MAX)
     try:
         _cal_guard_clearance()
         _arm_motion_deadline()
@@ -1828,21 +1957,30 @@ def _wheel_rate(ch, duty, reverse=False, brake_other=True):
         _pwm[idle].duty(0)
         _sleep_ms(150)
         gyro.gyro_reset()
-        last = 0.0
+        start_angle = float(gyro.gyro_turn())
+        last = start_angle
+        path = 0.0
+        samples = 0
         t0 = time.ticks_ms()
         while time.ticks_diff(time.ticks_ms(), t0) < 400:
             _sleep_ms(LOOP_MS)
-            angle = gyro.gyro_turn()
-            rates.append(abs(angle - last) * (1000.0 / LOOP_MS))
+            angle = float(gyro.gyro_turn())
+            path += abs(angle - last)
             last = angle
-            if len(rates) % 5 == 0:
+            samples += 1
+            if samples % 5 == 0:
                 _cal_guard_clearance()
+        elapsed_ms = max(1, time.ticks_diff(time.ticks_ms(), t0))
     finally:
         stop()
     _sleep_ms(250)
-    if len(rates) < 4:
+    net = last - start_angle
+    coherence = abs(net) / path if path > 0 else 0.0
+    if abs(net) < CAL_WHEEL_NET_MIN_DEG or coherence < CAL_WHEEL_COHERENCE_MIN:
+        _log("  wheel %s %d %s vibration rejected net=%.1f path=%.1f coherent=%.2f"
+             % (ch, duty, "rev" if reverse else "fwd", net, path, coherence))
         return 0.0
-    return _median(rates[len(rates) * 2 // 3:])
+    return net * 1000.0 / elapsed_ms
 
 
 def _wheel_starts(ch, duty):
@@ -1856,9 +1994,13 @@ def _wheel_starts(ch, duty):
     reverse_rate = _wheel_rate(ch, duty, True)
     _log("  wheel %s %d pair fwd=%.1f rev=%.1f"
          % (ch, duty, forward_rate, reverse_rate))
-    # Requiring the weaker direction to pass avoids finding a floor that
-    # works going forward but stalls during the opposite turn or reverse.
-    return min(forward_rate, reverse_rate)
+    # A real wheel must turn the chassis in opposite signed directions.
+    # Same-sign readings are gyro drift; alternating absolute movement is
+    # vibration. Neither may unlock the two-wheel phase.
+    if forward_rate * reverse_rate >= 0:
+        _log("  wheel %s %d rejected: directions not opposite" % (ch, duty))
+        return 0.0
+    return min(abs(forward_rate), abs(reverse_rate))
 
 
 def _verify_motor_health():
@@ -1873,11 +2015,14 @@ def _verify_motor_health():
     for ch in ("A", "B"):
         forward_rate = _wheel_rate(ch, CAL_HEALTH_DUTY, False, False)
         reverse_rate = _wheel_rate(ch, CAL_HEALTH_DUTY, True, False)
+        opposite = forward_rate * reverse_rate < 0
         health[ch] = {"forward": forward_rate, "reverse": reverse_rate,
-                      "typical": _median((forward_rate, reverse_rate))}
+                      "typical": _median((abs(forward_rate),
+                                           abs(reverse_rate)))}
         _log("health wheel %s duty %d fwd=%.1f rev=%.1f"
              % (ch, CAL_HEALTH_DUTY, forward_rate, reverse_rate))
-        if min(forward_rate, reverse_rate) < CAL_HEALTH_RATE_MIN:
+        if (not opposite or
+                min(abs(forward_rate), abs(reverse_rate)) < CAL_HEALTH_RATE_MIN):
             _log("FAIL wheel %s health below %.1f deg/s"
                  % (ch, CAL_HEALTH_RATE_MIN))
             _cal_show("CAL FAIL", "wheel %s wire?" % ch, "old cal kept")
@@ -2334,6 +2479,24 @@ def _characterise(verbose=True, force_starts=False):
     else:
         _log("RESUME sweep %s" % (sweep,))
 
+    # The adaptive 12% sequence can step from 496 straight to 556 and never
+    # command the configured 550 ceiling. Model fitting does not require the
+    # endpoint, but capacitor validation does: explicitly exercise both
+    # opposed directions at the absolute maximum after both individual
+    # wheels have already been proven.
+    stress = state.get("stress_max")
+    if (not isinstance(stress, list) or len(stress) != 2 or
+            int(stress[0]) != CAL_POWER_MAX):
+        _cal_show("stress test", "duty %d" % CAL_POWER_MAX, "both ways")
+        stress_rate = _spin_rate(CAL_POWER_MAX, PROBE_MS)
+        state["stress_max"] = [CAL_POWER_MAX, stress_rate]
+        _save_cal_state(state)
+        _log("stress %4d -> %7.1f deg/s" %
+             (CAL_POWER_MAX, stress_rate))
+    else:
+        _log("RESUME stress %d -> %.1f deg/s" %
+             (int(stress[0]), float(stress[1])))
+
     pts = state.get("points")
     if not isinstance(pts, list):
         pts = []
@@ -2386,17 +2549,19 @@ def _characterise(verbose=True, force_starts=False):
         dead = 0.0
 
     tm = state.get("tm")
-    if tm is None:
-        _cal_show("timing", "duty %d" % sweep[-1])
-        tm = _measure_tm(sweep[-1])
+    tm_duty = int(state.get("tm_duty", -1))
+    if tm is None or tm_duty != CAL_POWER_MAX:
+        _cal_show("timing stress", "duty %d" % CAL_POWER_MAX)
+        tm = _measure_tm(CAL_POWER_MAX)
         if tm is None or tm < 0.03:
             tm = TM_DEFAULT
             _log("Tm not measurable unkicked - using default %.2f" % tm)
         state["tm"] = tm
+        state["tm_duty"] = CAL_POWER_MAX
         _save_cal_state(state)
     else:
         tm = float(tm)
-        _log("RESUME timing Tm=%.3f" % tm)
+        _log("RESUME timing duty %d Tm=%.3f" % (tm_duty, tm))
 
     # Gains from the measured plant. Plant Km/(s(1+Tm.s)) under PD gives
     # s^2 + ((1+Km.Kd)/Tm)s + Km.Kp/Tm = 0; matched to s^2 + 2.zeta.wn.s +

@@ -434,6 +434,38 @@ window.addEventListener('load', function () {
         }
     };
 
+    Blockly.Blocks['robot_stop_if_close'] = {
+        init: function() {
+            this.setColour('#FFD400');
+            this.appendDummyInput()
+                .appendField('stop forward motors if US is less than')
+                .appendField(new Blockly.FieldNumber(200, 20, 2400, 10), 'MM')
+                .appendField('mm');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Enable the Robot OS ultrasonic guard. A fresh background ping stops forward motion below this distance. Turning and reversing remain available.');
+        }
+    };
+
+    Blockly.Blocks['robot_stopped_by_distance'] = {
+        init: function() {
+            this.setColour('#FFD400');
+            this.appendDummyInput().appendField('stopped by US distance?');
+            this.setOutput(true, 'Boolean');
+            this.setTooltip('True when the Robot OS ultrasonic guard has stopped or refused forward motion.');
+        }
+    };
+
+    Blockly.Blocks['robot_distance_guard_off'] = {
+        init: function() {
+            this.setColour('#FFD400');
+            this.appendDummyInput().appendField('ultrasonic forward guard off');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Disable automatic forward stopping. This does not start or stop the motors by itself.');
+        }
+    };
+
     /* ---- generators ------------------------------------------------------ */
 
     Blockly.Python['robot_servo_angle'] = function(block) {
@@ -455,6 +487,21 @@ window.addEventListener('load', function () {
         Blockly.Python.definitions_['import_robot'] = 'import robot';
         return ['robot.ping_mm(' + block.getFieldValue('TIMEOUT') + ')',
                 Blockly.Python.ORDER_FUNCTION_CALL];
+    };
+
+    Blockly.Python['robot_stop_if_close'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        return 'robot.stop_if_close(' + block.getFieldValue('MM') + ')\n';
+    };
+
+    Blockly.Python['robot_stopped_by_distance'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        return ['robot.stopped_by_distance()', Blockly.Python.ORDER_FUNCTION_CALL];
+    };
+
+    Blockly.Python['robot_distance_guard_off'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        return 'robot.distance_guard_off()\n';
     };
 
     /* ---- drive at an exact duty -------------------------------------------

@@ -742,7 +742,7 @@ class files {
          + "except OSError:\n"
          + "    pass\n"
          + "time.sleep(1)\n"
-         + "_calibration = robot.characterise()\n"
+         + "_calibration = robot.characterise(restart=True)\n"
          + "robot._timer_stop()\n"
          + "if _calibration is not None:\n"
          + "    try:\n"

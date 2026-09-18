@@ -187,9 +187,17 @@ check("BIPES named speeds are distinct and power-safe",
       and robot.SPEEDS["fast"] <= robot.POWER_SAFE_MAX,
       repr(robot.SPEEDS))
 check("every fresh-calibration breakaway probe is power-safe",
-      robot.CAL_POWER_MAX == robot.POWER_SAFE_MAX
-      and max(robot.BREAKAWAY_PROBES) == robot.POWER_SAFE_MAX,
+      robot.BREAKAWAY_POWER_MAX == robot.POWER_SAFE_MAX
+      and max(robot.BREAKAWAY_PROBES) == robot.BREAKAWAY_POWER_MAX,
       repr(robot.BREAKAWAY_PROBES))
+check("capacitor validation build stresses opposed motors to the safe maximum",
+      robot.CAL_POWER_MAX == robot.POWER_SAFE_MAX,
+      robot.CAL_POWER_MAX)
+robot_source = open(os.path.join(FW, "robot.py"), encoding="utf-8").read()
+check("calibration explicitly probes the exact capacitor-stress ceiling",
+      "_spin_rate(CAL_POWER_MAX, PROBE_MS)" in robot_source)
+check("timing pulse explicitly uses the exact capacitor-stress ceiling",
+      "_measure_tm(CAL_POWER_MAX)" in robot_source)
 saved_breakaway = robot.get_breakaway()
 check("manual breakaway values are clamped to safe power",
       robot.set_breakaway(999, -1) == (robot.POWER_SAFE_MAX, 0),
@@ -373,8 +381,8 @@ check("pure spins only stop at actual collision clearance",
       and robot.CAL_SPIN_CLEARANCE_MM < robot.CAL_CLEARANCE_MM,
       robot.CAL_SPIN_CLEARANCE_MM)
 original_wheel_rate = robot._wheel_rate
-health_rates = {("A", False): 380.0, ("A", True): 340.0,
-                ("B", False): 310.0, ("B", True): 315.0}
+health_rates = {("A", False): 380.0, ("A", True): -340.0,
+                ("B", False): -310.0, ("B", True): 315.0}
 health_probe_modes = []
 def fake_health_rate(ch, duty, reverse=False, brake_other=True):
     health_probe_modes.append(brake_other)
@@ -392,10 +400,17 @@ check("loaded motor rates produce a bounded automatic trim estimate",
       and health_trim[1] == 1.0, repr(health_trim))
 trim_before_failed_health = robot.get_trim()
 robot._wheel_rate = lambda ch, duty, reverse=False, brake_other=True: (
-    0.0 if ch == "A" else 310.0)
+    0.0 if ch == "A" else (-310.0 if reverse else 310.0))
 check("a disconnected motor fails calibration before saved gains are reused",
       robot._verify_motor_health() is None
       and robot.get_trim() == trim_before_failed_health)
+robot._wheel_rate = original_wheel_rate
+signed_probe_rates = iter((32.0, 35.0, 75.0, -80.0))
+robot._wheel_rate = lambda ch, duty, reverse=False, brake_other=True: next(signed_probe_rates)
+check("same-sign gyro vibration cannot prove a wheel moved",
+      robot._wheel_starts("A", 60) == 0.0)
+check("opposite signed net rotation proves both wheel directions",
+      robot._wheel_starts("A", 180) == 75.0)
 robot._wheel_rate = original_wheel_rate
 checkpoint = {"schema": robot.CAL_STATE_VERSION,
               "starts": {"A": 150, "B": 135}, "sweep_index": 2}

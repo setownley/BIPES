@@ -26,6 +26,25 @@ assert "FieldNumber(450, 0, 550" in exact_block
 assert "backward_at" in exact_block
 assert "grout recovery" in exact_block
 
+assert "Blockly.Blocks['robot_stop_if_close']" in source
+assert "stop forward motors if US is less than" in source
+assert "FieldNumber(200, 20, 2400" in source
+assert "Blockly.Blocks['robot_stopped_by_distance']" in source
+assert "Blockly.Blocks['robot_distance_guard_off']" in source
+assert "robot.stop_if_close(" in source
+assert "robot.stopped_by_distance()" in source
+assert "robot.distance_guard_off()" in source
+
+toolbox_source = (root / "ui" / "toolbox" / "esp32.xml").read_text(encoding="utf-8")
+index_source = (root / "ui" / "index.html").read_text(encoding="utf-8")
+for block_type in ("robot_stop_if_close", "robot_stopped_by_distance",
+                   "robot_distance_guard_off"):
+    assert '<block type="%s"></block>' % block_type in toolbox_source
+    assert '<block type="%s"></block>' % block_type in index_source
+
+ui_source = (root / "ui" / "core" / "ui.js").read_text(encoding="utf-8")
+assert "const DATA_VER = '0.2.21.0919';" in ui_source
+
 gyro_start = source.index("Blockly.Blocks['gyro_calibrate']")
 gyro_end = source.index("var MMCAL_SRC", gyro_start)
 gyro_block = source[gyro_start:gyro_end]
@@ -48,7 +67,7 @@ assert "calibration cannot Run over USB" in cal_generator
 utils_source = (root / "ui" / "core" / "utils.js").read_text(encoding="utf-8")
 assert "robot_calibration_main ()" in utils_source
 assert '"time.sleep(1)\\n"' in utils_source
-assert "_calibration = robot.characterise()" in utils_source
+assert "_calibration = robot.characterise(restart=True)" in utils_source
 assert "os.rename('main.py', 'calibration_attempt.py')" in utils_source
 assert "os.rename('calibration_attempt.py', 'calibration_done.py')" in utils_source
 assert "robot._cal_show('CAL DONE', 'saved', 'load blocks')" in utils_source

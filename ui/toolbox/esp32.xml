@@ -26,6 +26,9 @@
 <block type="robot_look"></block>
 <block type="robot_servo_off"></block>
 <block type="robot_ping"></block>
+<block type="robot_stop_if_close"></block>
+<block type="robot_stopped_by_distance"></block>
+<block type="robot_distance_guard_off"></block>
 
 <!-- Maze and calibration blocks, grouped at the bottom on purpose: they are
      tools for a specific lesson, not everyday driving/sensing blocks. -->
@@ -3436,7 +3439,6 @@ _
 </category>
 </category>
 </document>
-
 
 
 
