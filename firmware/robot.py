@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "1.2.67"  # asynchronous forward ultrasonic stopping guard
+VERSION = "1.2.68"  # blocking drive-until-distance classroom command
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -1175,6 +1175,35 @@ def stop_if_close(distance=200):
 def stopped_by_distance():
     """True while the ultrasonic guard is holding forward motion stopped."""
     return bool(_distance_guard_stopped)
+
+def drive_until_distance(distance=200, duty=450):
+    """Drive forward until Timer 0 sees an obstacle closer than ``distance``.
+
+    The background OS owns every ultrasonic ping.  This call only waits for
+    its forward guard to stop the wheels, so it cannot race a second ping
+    against the timer.  A temporary timer is used when a project has disabled
+    the Robot OS, and every exit path leaves the motors stopped.
+
+    Returns True when the requested distance was reached, or False when the
+    run was interrupted / reached the eight-second motor safety deadline.
+    """
+    timer_was_off = _tim is None
+    if timer_was_off:
+        _timer_start()
+    stop_if_close(distance)
+    reached = False
+    try:
+        if not stopped_by_distance():
+            forward_at(duty)
+        while not _abort_requested and not stopped_by_distance():
+            _sleep_ms(20)
+        reached = stopped_by_distance()
+        return reached
+    finally:
+        stop()
+        distance_guard_off()
+        if timer_was_off:
+            _timer_stop()
 
 def distance_guard_off():
     """Disable the ultrasonic guard without starting or stopping any motion."""

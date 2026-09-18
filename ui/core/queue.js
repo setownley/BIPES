@@ -447,6 +447,19 @@ window.addEventListener('load', function () {
         }
     };
 
+    Blockly.Blocks['robot_drive_until_distance'] = {
+        init: function() {
+            this.setColour('#FFD400');
+            this.appendDummyInput()
+                .appendField('drive forward at 450 until US is less than')
+                .appendField(new Blockly.FieldNumber(200, 20, 2400, 10), 'MM')
+                .appendField('mm');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Drive forward at power 450 until the Robot OS ultrasonic timer sees a valid distance below this value. 9999 means open space. Motors always stop when this block finishes.');
+        }
+    };
+
     Blockly.Blocks['robot_stopped_by_distance'] = {
         init: function() {
             this.setColour('#FFD400');
@@ -492,6 +505,11 @@ window.addEventListener('load', function () {
     Blockly.Python['robot_stop_if_close'] = function(block) {
         Blockly.Python.definitions_['import_robot'] = 'import robot';
         return 'robot.stop_if_close(' + block.getFieldValue('MM') + ')\n';
+    };
+
+    Blockly.Python['robot_drive_until_distance'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        return 'robot.drive_until_distance(' + block.getFieldValue('MM') + ')\n';
     };
 
     Blockly.Python['robot_stopped_by_distance'] = function(block) {

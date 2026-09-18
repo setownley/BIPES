@@ -109,6 +109,28 @@ check("guard off clears all guard state",
       robot._distance_guard_blocked is False and
       robot.stopped_by_distance() is False)
 
+robot.clear_abort()
+robot._timer_stop()
+original_sleep_ms = robot._sleep_ms
+drive_waited = [False]
+def close_during_drive(milliseconds):
+    if robot._motion_direction == 1:
+        drive_waited[0] = True
+        robot._distance_guard_step(150)
+robot._sleep_ms = close_during_drive
+try:
+    reached = robot.drive_until_distance(200)
+finally:
+    robot._sleep_ms = original_sleep_ms
+check("drive-until-distance waits for the Timer-0 guard", reached is True)
+check("drive-until-distance uses a temporary timer when OS is off",
+      drive_waited[0] is True and robot._tim is None)
+check("drive-until-distance always leaves motors and guard off",
+      not any(duties(robot).values()) and
+      robot._distance_guard_mm == 0 and
+      robot.stopped_by_distance() is False,
+      repr(duties(robot)))
+
 os.chdir(HERE)
 shutil.rmtree(scratch, ignore_errors=True)
 print()
