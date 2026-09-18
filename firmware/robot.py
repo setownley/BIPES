@@ -6,7 +6,7 @@
 # Timer 0, the sensors, or the OLED. Student-generated code must only call
 # the public functions at the bottom.
 
-VERSION = "1.2.67"  # asynchronous forward ultrasonic stopping guard
+VERSION = "1.2.68"  # sane measured timed turns when no gyro is fitted
 
 from machine import Pin, I2C, Timer, PWM, ADC, time_pulse_us
 import time
@@ -122,6 +122,12 @@ TURN_POWER_MAX = 300       # faster cruise while retaining useful gyro samples
 TURN_LAUNCH_DUTY = 450     # sequential one-wheel kick climbed out of tile grout
 TURN_LAUNCH_MS = 120       # 60 ms per wheel before both settle at the 300 cap
 TURN_RELAUNCH_ATTEMPTS = 3 # bounded retries when a braked wheel sits in grout
+GYRO_I2C_ADDR = 0x68
+# Measured on the original no-gyro classroom chassis at medium duty.  These
+# are conservative defaults, not claims of gyro-level accuracy.
+TIMED_T90_DEFAULT = {"left": 0.48387096, "right": 0.32142856}
+TIMED_T90_MIN_S = 0.12
+TIMED_T90_MAX_S = 1.20
 LEFT_MOTOR = "A"            # which DRV8833 channel drives the LEFT wheel
 FLIP_A = False              # set True if motor A runs backwards for "forward"
 FLIP_B = True   # motor B wiring reversed on this chassis - bench-determined 2026-07-07
@@ -240,6 +246,10 @@ OLED_Y0 = 24
 # Hardware init (module import runs once; MicroPython caches the module)
 # ---------------------------------------------------------------------------
 _i2c  = I2C(0, scl=Pin(6), sda=Pin(5), freq=400000)
+try:
+    _gyro_present = GYRO_I2C_ADDR in _i2c.scan()
+except OSError:
+    _gyro_present = False
 _oled = ssd1306.SSD1306_I2C(128, 64, _i2c)
 _gyro_bus_lock = None       # shared with gyro.py once heading control starts
 
@@ -978,7 +988,10 @@ def _hold_off():
 
 
 def calibrated():
-    return _km > 0 and _kp > 0
+    # A copied mmcal.json must not send a no-gyro robot into the closed-loop
+    # path.  Without this hardware gate it can spin until the five-second
+    # timeout while waiting for an angle that can never arrive.
+    return _gyro_present and _km > 0 and _kp > 0
 
 
 def _load_mmcal():
@@ -1719,19 +1732,30 @@ def _turn_degrees_timed(direction, degrees):
     d = min(max(d, 0), 450)                 # clamp per the block's range
     if d == 0:
         return
+    turn_direction = str(direction).lower()
+    if turn_direction not in TIMED_T90_DEFAULT:
+        turn_direction = "left"
     t90 = None
     try:
         import json
         with open(MAZE_CAL_FILE) as f:
-            t90 = json.load(f).get("t90_" + str(direction).lower())
-    except (OSError, ValueError, ImportError):
+            t90 = json.load(f).get("t90_" + turn_direction)
+        if t90 is not None:
+            t90 = float(t90)
+    except (OSError, ValueError, ImportError, TypeError):
         pass
-    if t90 is None:
-        print("robot: t90 not calibrated - run bench turn section")
-        return
+    # Some old calibration files recorded milliseconds although this API has
+    # always consumed seconds.  Recognise that format, then reject anything
+    # still physically implausible instead of allowing multi-revolution turns.
+    if t90 is not None and t90 > 10 and t90 <= 5000:
+        t90 /= 1000.0
+    if (t90 is None or t90 < TIMED_T90_MIN_S
+            or t90 > TIMED_T90_MAX_S):
+        t90 = TIMED_T90_DEFAULT[turn_direction]
+        print("robot: using measured no-gyro t90", turn_direction, t90)
     t = t90 * d / 90.0
     stop()
-    turn(direction)
+    turn(turn_direction)
     _sleep_ms(int(t * 1000))
     stop()
 

@@ -20,7 +20,7 @@ class Pin:
 class I2C:
     TOF_ADDR = 0x29
     def __init__(self, *a, **k): pass
-    def scan(self): return [0x3C]
+    def scan(self): return [0x3C, 0x68]
     def _guard(self, addr):
         if addr == self.TOF_ADDR: raise OSError(19, 'ENODEV')
     def writeto(self, addr, *a, **k): self._guard(addr)

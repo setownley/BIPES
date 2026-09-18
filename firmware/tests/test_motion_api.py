@@ -234,6 +234,35 @@ check("continuous turn block is capped at safe duty",
 robot.stop()
 robot._km, robot._kp = saved_km, saved_kp
 
+print("No-gyro timed turns")
+saved_gyro_present = robot._gyro_present
+robot._gyro_present = False
+check("missing gyro forces the open-loop fallback even with saved gains",
+      robot.calibrated() is False)
+robot._gyro_present = saved_gyro_present
+with open(robot.MAZE_CAL_FILE) as saved_cal_file:
+    saved_maze_cal = json.load(saved_cal_file)
+timed_cal = dict(saved_maze_cal)
+timed_cal.update({"t90_left": 90.0,       # corrupt/ambiguous old value
+                  "t90_right": 321.42856})  # old milliseconds format
+with open(robot.MAZE_CAL_FILE, "w") as timed_cal_file:
+    json.dump(timed_cal, timed_cal_file)
+original_sleep_ms = robot._sleep_ms
+timed_sleeps = []
+robot._sleep_ms = lambda milliseconds: timed_sleeps.append(milliseconds)
+robot._turn_degrees_timed("left", 90)
+left_sleeps = list(timed_sleeps)
+timed_sleeps[:] = []
+robot._turn_degrees_timed("right", 90)
+right_sleeps = list(timed_sleeps)
+robot._sleep_ms = original_sleep_ms
+with open(robot.MAZE_CAL_FILE, "w") as saved_cal_file:
+    json.dump(saved_maze_cal, saved_cal_file)
+check("absurd t90 falls back to this chassis' measured left estimate",
+      483 in left_sleeps or 484 in left_sleeps, repr(left_sleeps))
+check("legacy millisecond t90 is converted to seconds",
+      321 in right_sleeps, repr(right_sleeps))
+
 print("Backward gyro hold")
 robot.backward_at(300)
 gyro.callback(0.0)
