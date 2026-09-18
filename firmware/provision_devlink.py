@@ -5,6 +5,11 @@ changed for the compiled robot + Bluetooth DevLink system.
 
 Run from anywhere:
    python C:\\bipes-classroom\\firmware\\provision_devlink.py
+   python C:\\bipes-classroom\\firmware\\provision_devlink.py -cal
+
+``-cal`` installs a one-shot autonomous calibration program as ``main.py``.
+After provisioning, unplug USB and power the robot from its battery; it starts
+calibration after one second.  Add ``--once`` to exit after one board.
 
 Per board: plug it in, press Enter, wait for DONE, unplug, then repeat.
 Requires (one-time):  pip install esptool mpremote pyserial
@@ -14,6 +19,7 @@ import subprocess
 import sys
 import time
 import os
+import argparse
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -33,6 +39,14 @@ FILES = [
     ("bench.py", "bench.py"),
     ("maze_cal_factory.json", "maze_cal.json"),
     ("robot_commission.py", "devlink_app.py"),
+]
+
+# Same runtime, but boot directly into the one-shot autonomous calibration
+# image after USB is unplugged and the robot is power-cycled.
+CAL_FILES = [
+    (("calibration_main.py", "main.py") if board_name == "main.py"
+     else (local_name, board_name))
+    for local_name, board_name in FILES
 ]
 
 ESP_VID = "303A"
@@ -57,7 +71,7 @@ def run(cmd, timeout=180):
     return r.stdout
 
 
-def provision(port):
+def provision(port, files=FILES):
     print("[1/4] erasing flash...")
     run([sys.executable, "-m", "esptool", "--chip", "esp32c3", "--port", port,
          "erase-flash"])
@@ -67,7 +81,7 @@ def provision(port):
     print("      waiting for reboot...")
     time.sleep(4)
     print("[3/4] copying DevLink robot files...")
-    for local_name, board_name in FILES:
+    for local_name, board_name in files:
         src = os.path.join(SCRIPT_DIR, local_name)
         if not os.path.exists(src):
             raise RuntimeError("missing local file: " + src)
@@ -75,10 +89,10 @@ def provision(port):
              "cp", src, ":" + board_name])
     print("[4/4] verifying (name AND byte size)...")
     out = run([sys.executable, "-m", "mpremote", "connect", port, "fs", "ls"])
-    missing = [board_name for _, board_name in FILES if board_name not in out]
+    missing = [board_name for _, board_name in files if board_name not in out]
     if missing:
         raise RuntimeError("files missing after copy: %s" % missing)
-    board_names = [board_name for _, board_name in FILES]
+    board_names = [board_name for _, board_name in files]
     code = ("import os\r"
             "print({f: os.stat(f)[6] for f in %r})" % board_names)
     out = run([sys.executable, "-m", "mpremote", "connect", port, "exec",
@@ -88,7 +102,7 @@ def provision(port):
     except Exception:
         raise RuntimeError("could not read on-board file sizes: " + out.strip())
     bad = []
-    for local_name, board_name in FILES:
+    for local_name, board_name in files:
         want = os.path.getsize(os.path.join(SCRIPT_DIR, local_name))
         got = on_board.get(board_name, -1)
         flag = "ok" if got == want else "MISMATCH"
@@ -136,18 +150,34 @@ def reset_to_devlink(port):
     time.sleep(2)
 
 
-def main():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Provision ESP32-C3 classroom robot firmware")
+    parser.add_argument(
+        "-cal", "--cal", action="store_true",
+        help="install autonomous calibration as main.py; unplug USB and "
+             "power-cycle to run it")
+    parser.add_argument(
+        "--once", action="store_true",
+        help="provision one board and exit instead of waiting for the next")
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    files = CAL_FILES if args.cal else FILES
     if not os.path.exists(FIRMWARE_BIN):
         sys.exit("firmware bin not found next to this script: %s" % FIRMWARE_BIN)
-    absent = [local_name for local_name, _ in FILES
+    absent = [local_name for local_name, _ in files
               if not os.path.exists(os.path.join(SCRIPT_DIR, local_name))]
     if absent:
         sys.exit("missing file(s) in %s: %s" %
                  (SCRIPT_DIR, ", ".join(absent)))
     n = 0
     while True:
-        input("\n=== plug in the next board, then press Enter "
-              "(Ctrl-C to stop) === ")
+        mode = "CALIBRATION" if args.cal else "DEVLINK"
+        input("\n=== [%s] plug in the next board, then press Enter "
+              "(Ctrl-C to stop) === " % mode)
         port = find_port()
         if port is None:
             print("no (or multiple) Espressif USB device found - "
@@ -155,16 +185,24 @@ def main():
             continue
         print("board on", port)
         try:
-            provision(port)
+            provision(port, files)
             n += 1
             ok = screen_test(port, n)
-            reset_to_devlink(port)
-            print("*** BOARD %d DONE%s - unplug it ***" %
-                  (n, "" if ok else " (files only, no screen)"))
+            if args.cal:
+                print("*** BOARD %d READY TO CALIBRATE%s ***" %
+                      (n, "" if ok else " (files only, no screen)"))
+                print("    unplug USB, place the robot safely, then power it "
+                      "from the battery; calibration starts after 1 second")
+            else:
+                reset_to_devlink(port)
+                print("*** BOARD %d DONE%s - unplug it ***" %
+                      (n, "" if ok else " (files only, no screen)"))
         except Exception as e:
             print("!!! FAILED:", e)
             print("    if it failed at step 1/2: unplug, hold BOOT while "
                   "replugging, retry")
+        if args.once:
+            break
 
 
 if __name__ == "__main__":

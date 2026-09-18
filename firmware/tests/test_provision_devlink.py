@@ -24,6 +24,20 @@ assert "robot.py" not in targets
 assert "gyro.py" not in targets
 assert "devlink_server.py" not in targets
 
+cal_targets = [target for _, target in provision.CAL_FILES]
+assert cal_targets == targets
+assert ("calibration_main.py", "main.py") in provision.CAL_FILES
+assert ("main.py", "main.py") not in provision.CAL_FILES
+assert provision.parse_args(["-cal"]).cal is True
+assert provision.parse_args(["--cal"]).cal is True
+assert provision.parse_args(["--once"]).once is True
+
+with open(os.path.join(FIRMWARE, "calibration_main.py"), encoding="utf-8") as source:
+    calibration_main = source.read()
+assert "robot.characterise(restart=True)" in calibration_main
+assert "if not robot._gyro_present:" in calibration_main
+assert "CAL NOT RUN: no gyro" in calibration_main
+
 with open(os.path.join(FIRMWARE, "maze_cal_factory.json"), encoding="utf-8") as source:
     factory = json.load(source)
 for key in ("trim", "breakaway_A", "breakaway_B", "t90_left", "t90_right"):
