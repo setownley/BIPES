@@ -442,7 +442,7 @@ window.addEventListener('load', function () {
                 .appendField(new Blockly.FieldNumber(200, 20, 2400, 10), 'MM')
                 .appendField('mm');
             this.setOutput(true, 'Boolean');
-            this.setTooltip('Logic block for a while loop. It enables the Robot OS ultrasonic guard, returns false while forward motion is clear, and true after a fresh ping stops forward motion. Turning and reversing remain available.');
+            this.setTooltip('Logic block for a while loop. Returns true while the ultrasonic path is clear. When a valid reading is below this distance it stops the motors and returns false, ending the loop. 9999 means open space.');
         }
     };
 
@@ -499,8 +499,8 @@ window.addEventListener('load', function () {
             '    reading = robot.distance_mm()\n' +
             '    if reading != 9999 and reading < distance:\n' +
             '        robot.stop()\n' +
-            '        return True\n' +
-            '    return False';
+            '        return False\n' +
+            '    return True';
         return ['_bipes_stop_if_close(' + block.getFieldValue('MM') + ')',
                 Blockly.Python.ORDER_FUNCTION_CALL];
     };
