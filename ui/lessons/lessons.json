@@ -1,0 +1,24 @@
+{
+  "_comment": "Lesson programs shown in the Shared tab (ui/shared.html). To add a week: put its .xml files (made with the BIPES Save button) in a new folder here and add an entry below. Paths are relative to ui/lessons/.",
+  "weeks": [
+    {
+      "title": "Week 3",
+      "name": "Teach the Chip to Think",
+      "tasks": [
+        { "title": "Task 3: Your first program", "file": "wk3/task3_first_program.xml" },
+        { "title": "Task 4: Blink forever", "file": "wk3/task4_blink_forever.xml" }
+      ]
+    },
+    {
+      "title": "Week 4",
+      "name": "Decisions, Decisions",
+      "tasks": [
+        { "title": "Task 1: Button and LED", "file": "wk4/task1_button_led.xml" },
+        { "title": "Task 2: Yellow light flash", "file": "wk4/task2_yellow_flash.xml" },
+        { "title": "Task 3: Don't touch! alarm", "file": "wk4/task3_dont_touch_alarm.xml" },
+        { "title": "Task 4: Traffic light (green start)", "file": "wk4/task4_green_start.xml" },
+        { "title": "Task 4 helper: all three lights", "file": "wk4/task4_all_three_lights.xml" }
+      ]
+    }
+  ]
+}

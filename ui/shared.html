@@ -1,14 +1,100 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson programs</title>
+<!--
+  Shared tab: lesson programs.
+  Shown inside the Shared tab's iframe (index.html, #content_programs). Reads
+  lessons/lessons.json, lists the weeks, then that week's task programs.
+  Clicking a task clears the Blocks workspace, loads the task's .xml (same
+  format as the BIPES Save button) and switches to the Blocks tab.
+  Same origin as index.html, so it uses the parent page's Code / UI / Blockly.
+-->
+<style>
+  body { font-family: sans-serif; margin: 24px; color: #333; background: #fff; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  p.hint { margin: 0 0 18px; color: #666; }
+  .list { display: flex; flex-direction: column; gap: 10px; max-width: 560px; }
+  button.item { font-size: 20px; text-align: left; padding: 14px 18px; border: 2px solid #3498db;
+                border-radius: 10px; background: #f4f9fd; color: #1f5f8b; cursor: pointer; }
+  button.item:hover, button.item:focus { background: #3498db; color: #fff; }
+  button.item small { display: block; font-size: 14px; opacity: 0.8; margin-top: 2px; }
+  button.back { font-size: 16px; margin-bottom: 16px; padding: 6px 14px; border: 1px solid #999;
+                border-radius: 8px; background: #fff; cursor: pointer; }
+  .msg { color: #b00020; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div id="app"><p>Loading lessons…</p></div>
+<script>
+(function () {
+  var app = document.getElementById('app');
+  var lessons = null;
 
-	<br>
-	<br>
+  function el(tag, props, children) {
+    var e = document.createElement(tag);
+    for (var k in props) e[k] = props[k];
+    (children || []).forEach(function (c) { e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return e;
+  }
+  function show(nodes) { app.innerHTML = ''; nodes.forEach(function (n) { app.appendChild(n); }); }
+  function message(text) { return el('p', { className: 'msg' }, [text]); }
 
-	<center>
-	<a href="https://bipes-271213.appspot.com/list">Click here to view shared programs</a> 
+  function showWeeks() {
+    var list = el('div', { className: 'list' });
+    lessons.weeks.forEach(function (week) {
+      list.appendChild(el('button', { className: 'item', onclick: function () { showTasks(week); } },
+        [week.title, el('small', {}, [week.name || ''])]));
+    });
+    show([el('h1', {}, ['Lesson programs']), el('p', { className: 'hint' }, ['Pick your week.']), list]);
+  }
 
-	<BR>
+  function showTasks(week) {
+    var list = el('div', { className: 'list' });
+    var status = el('div');
+    week.tasks.forEach(function (task) {
+      list.appendChild(el('button', { className: 'item', onclick: function () { loadTask(task, status); } }, [task.title]));
+    });
+    show([el('button', { className: 'back', onclick: showWeeks }, ['← All weeks']),
+          el('h1', {}, [week.title + (week.name ? ': ' + week.name : '')]),
+          el('p', { className: 'hint' }, ['Pick a task. It replaces the blocks on your screen.']),
+          list, status]);
+  }
+
+  function loadTask(task, status) {
+    var P = window.parent;
+    if (!P || P === window || !P.Code || !P.Code.workspace || !P.Blockly || !P.UI) {
+      status.replaceChildren(message('Open this from the Shared tab in BIPES.'));
+      return;
+    }
+    if (!confirm('Load "' + task.title + '"?\n\nThis clears the blocks you have now.')) return;
+    fetch('lessons/' + task.file, { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function (text) {
+        // Clear first: readWorkspace re-selects the board, and doing that with
+        // the old program's pin blocks still present shows a spurious
+        // "Check pins, target device changed!" warning.
+        P.Code.workspace.clear();
+        var content = P.UI['workspace'].readWorkspace(text, true);   // also selects the board in the file
+        var xml = P.Blockly.Xml.textToDom(content);
+        P.Blockly.Xml.domToWorkspace(xml, P.Code.workspace);
+        P.Code.handleLink('blocks', 1);                              // switch to the Blocks tab
+        try { P.UI['notify'].send('Loaded ' + task.title); } catch (e) {}
+      })
+      .catch(function (e) {
+        status.replaceChildren(message('Could not load ' + task.title + ' (' + e.message + '). Ask your teacher.'));
+      });
+  }
+
+  fetch('lessons/lessons.json', { cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (data) { lessons = data; showWeeks(); })
+    .catch(function (e) {
+      show([el('h1', {}, ['Lesson programs']), message('Could not load the lesson list (' + e.message + ').')]);
+    });
+})();
+</script>
+</body>
 </html>
-
-
-

@@ -1,0 +1,9 @@
+<xml xmlns="https://bipes.net.br">
+  <workspace>
+    <field name="DEVICE">ESP32C3</field>
+    <field name="TIMESTAMP">1793925624321</field>
+    <freeboard><![CDATA[]]></freeboard>
+    <databoard><![CDATA[]]></databoard> 
+  </workspace>
+  <block type="robot_led" x="40" y="40" id="L0001"><field name="STATE">True</field><next><block type="robot_wait" id="L0002"><value name="TIME"><shadow type="math_number" id="L0003"><field name="NUM">1</field></shadow></value><next><block type="robot_led" id="L0004"><field name="STATE">False</field><next><block type="robot_wait" id="L0005"><value name="TIME"><shadow type="math_number" id="L0006"><field name="NUM">1</field></shadow></value></block></next></block></next></block></next></block>
+</xml>

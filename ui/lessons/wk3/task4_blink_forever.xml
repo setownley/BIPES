@@ -1,0 +1,9 @@
+<xml xmlns="https://bipes.net.br">
+  <workspace>
+    <field name="DEVICE">ESP32C3</field>
+    <field name="TIMESTAMP">1793925624321</field>
+    <freeboard><![CDATA[]]></freeboard>
+    <databoard><![CDATA[]]></databoard> 
+  </workspace>
+  <block type="controls_whileUntil" id="L0013" x="40" y="40"><field name="MODE">WHILE</field><value name="BOOL"><block type="logic_boolean" id="L0014"><field name="BOOL">TRUE</field></block></value><statement name="DO"><block type="robot_led" id="L0007"><field name="STATE">True</field><next><block type="robot_wait" id="L0008"><value name="TIME"><shadow type="math_number" id="L0009"><field name="NUM">1</field></shadow></value><next><block type="robot_led" id="L0010"><field name="STATE">False</field><next><block type="robot_wait" id="L0011"><value name="TIME"><shadow type="math_number" id="L0012"><field name="NUM">1</field></shadow></value></block></next></block></next></block></next></block></statement></block>
+</xml>
