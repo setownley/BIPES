@@ -1,0 +1,9 @@
+<xml xmlns="https://bipes.net.br">
+  <workspace>
+    <field name="DEVICE">ESP32C3</field>
+    <field name="TIMESTAMP">1793925624321</field>
+    <freeboard><![CDATA[]]></freeboard>
+    <databoard><![CDATA[]]></databoard> 
+  </workspace>
+  <block type="robot_os_timer" id="L0047" x="40" y="40"><field name="ENABLED">FALSE</field><next><block type="controls_whileUntil" id="L0045"><field name="MODE">WHILE</field><value name="BOOL"><block type="logic_boolean" id="L0046"><field name="BOOL">TRUE</field></block></value><statement name="DO"><block type="gpio_set" id="L0035"><value name="pin"><shadow type="pinout" id="L0036"><field name="DEVICE">ESP32C3</field><field name="PIN">0</field></shadow></value><value name="value"><shadow type="logic_boolean" id="L0037"><field name="BOOL">TRUE</field></shadow></value><next><block type="delay" id="L0038"><value name="TIME"><shadow type="math_number" id="L0039"><field name="NUM">1</field></shadow></value><field name="SCALE">sleep</field><next><block type="gpio_set" id="L0040"><value name="pin"><shadow type="pinout" id="L0041"><field name="DEVICE">ESP32C3</field><field name="PIN">0</field></shadow></value><value name="value"><shadow type="logic_boolean" id="L0042"><field name="BOOL">FALSE</field></shadow></value><next><block type="delay" id="L0043"><value name="TIME"><shadow type="math_number" id="L0044"><field name="NUM">1</field></shadow></value><field name="SCALE">sleep</field></block></next></block></next></block></next></block></statement></block></next></block>
+</xml>

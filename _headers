@@ -53,3 +53,13 @@
 
 /ui/pylibs/*
   Cache-Control: no-cache
+
+# Lesson programs for the Shared tab (ui/shared.html reads lessons/lessons.json
+# and the task .xml files). no-cache so a teacher's edit to a lesson shows up
+# on the next load instead of whenever the browser's heuristic cache expires.
+
+/ui/lessons/*
+  Cache-Control: no-cache
+
+/ui/shared.html
+  Cache-Control: no-cache
