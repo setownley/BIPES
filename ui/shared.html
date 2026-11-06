@@ -63,6 +63,21 @@
           list, status]);
   }
 
+  // Move the loaded program to the top-left of the visible Blocks area
+  // (MARGIN screen pixels in from the toolbox and the top), where a program
+  // sits when a teacher builds it, instead of the centre of the workspace.
+  var MARGIN_X = 80, MARGIN_Y = 90;
+  function placeTopLeft(P) {
+    var ws = P.Code.workspace;
+    P.Blockly.svgResize(ws);
+    var box = ws.getBlocksBoundingBox();
+    if (!box || box.right === box.left) return;
+    var m = ws.getMetrics();
+    var dx = (m.viewLeft + MARGIN_X) / ws.scale - box.left;
+    var dy = (m.viewTop + MARGIN_Y) / ws.scale - box.top;
+    ws.getTopBlocks(false).forEach(function (b) { b.moveBy(dx, dy); });
+  }
+
   function loadTask(task, status) {
     var P = window.parent;
     if (!P || P === window || !P.Code || !P.Code.workspace || !P.Blockly || !P.UI) {
@@ -77,10 +92,18 @@
         // the old program's pin blocks still present shows a spurious
         // "Check pins, target device changed!" warning.
         P.Code.workspace.clear();
+        // readWorkspace re-selects the board, which reloads the toolbox
+        // asynchronously, and Code.reloadToolbox() ends with scrollCenter().
+        // Hook that one reload so the program is placed after the recentre.
+        var origReload = P.Code.reloadToolbox;
+        var restore = function () { P.Code.reloadToolbox = origReload; };
+        P.Code.reloadToolbox = function (x) { restore(); origReload(x); placeTopLeft(P); };
+        setTimeout(restore, 5000);                                  // safety: never leave the hook in place
         var content = P.UI['workspace'].readWorkspace(text, true);   // also selects the board in the file
         var xml = P.Blockly.Xml.textToDom(content);
         P.Blockly.Xml.domToWorkspace(xml, P.Code.workspace);
         P.Code.handleLink('blocks', 1);                              // switch to the Blocks tab
+        setTimeout(function () { placeTopLeft(P); }, 50);           // in case no toolbox reload happens
         try { P.UI['notify'].send('Loaded ' + task.title); } catch (e) {}
       })
       .catch(function (e) {
