@@ -26,6 +26,13 @@ assert "FieldNumber(450, 0, 550" in exact_block
 assert "backward_at" in exact_block
 assert "grout recovery" in exact_block
 
+spin_start = source.index("Blockly.Blocks['robot_spin_percent']")
+spin_end = source.index("/* ---- DevLink data", spin_start)
+spin_block = source[spin_start:spin_end]
+assert "FieldNumber(30, 0, 50, 1)" in spin_block          # 50 % = duty 512 < POWER_SAFE_MAX 550
+assert "Math.round(pct * 1023 / 100)" in spin_block
+assert "backward_at" in spin_block and "forward_at" in spin_block
+
 assert "Blockly.Blocks['robot_stop_if_close']" in source
 assert "stop forward motors if US is less than" in source
 assert "FieldNumber(200, 20, 2400" in source
@@ -38,7 +45,7 @@ assert "robot.distance_guard_off()" in source
 toolbox_source = (root / "ui" / "toolbox" / "esp32.xml").read_text(encoding="utf-8")
 index_source = (root / "ui" / "index.html").read_text(encoding="utf-8")
 for block_type in ("robot_stop_if_close", "robot_stopped_by_distance",
-                   "robot_distance_guard_off"):
+                   "robot_distance_guard_off", "robot_spin_percent"):
     assert '<block type="%s"></block>' % block_type in toolbox_source
     assert '<block type="%s"></block>' % block_type in index_source
 
