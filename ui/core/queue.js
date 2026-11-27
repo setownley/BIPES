@@ -544,6 +544,40 @@ window.addEventListener('load', function () {
         return 'robot.' + fn + '(' + block.getFieldValue('DUTY') + ')\n';
     };
 
+    /* ---- spin the motor with the power ON for a % of the time --------------
+     * Lesson 6 speed experiment. The percentage is the real PWM ON-time:
+     * duty = round(pct * 1023 / 100). It is capped at 50 % (duty 512) so it
+     * stays under POWER_SAFE_MAX (550, about 54 %) and never needs clamping,
+     * so the number on the block is what the driver chip actually gets
+     * (before any saved trim). Goes through forward_at()/backward_at(), so it
+     * keeps the same motion deadline, ramp and stop behaviour.
+     */
+    Blockly.Blocks['robot_spin_percent'] = {
+        init: function() {
+            this.setColour('#FFD400');
+            this.appendDummyInput()
+                .appendField('spin motor')
+                .appendField(new Blockly.FieldDropdown([
+                    ['forward', 'forward'],
+                    ['backward', 'backward']
+                ]), 'DIR')
+                .appendField('power ON')
+                .appendField(new Blockly.FieldNumber(30, 0, 50, 1), 'PCT')
+                .appendField('%');
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setTooltip('Spin the motor with the power ON for this % of the time (0 to 50). It keeps spinning until a stop motors block runs.');
+        }
+    };
+
+    Blockly.Python['robot_spin_percent'] = function(block) {
+        Blockly.Python.definitions_['import_robot'] = 'import robot';
+        var pct = Math.min(Math.max(Number(block.getFieldValue('PCT')) || 0, 0), 50);
+        var duty = Math.round(pct * 1023 / 100);
+        var fn = block.getFieldValue('DIR') === 'backward' ? 'backward_at' : 'forward_at';
+        return 'robot.' + fn + '(' + duty + ')\n';
+    };
+
     /* ---- DevLink data passed between repeated block runs ----------------- */
     Blockly.Blocks['robot_previous_result'] = {
         init: function() {
