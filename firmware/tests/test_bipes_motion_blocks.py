@@ -29,9 +29,9 @@ assert "grout recovery" in exact_block
 spin_start = source.index("Blockly.Blocks['robot_spin_percent']")
 spin_end = source.index("/* ---- DevLink data", spin_start)
 spin_block = source[spin_start:spin_end]
-assert "FieldNumber(30, 0, 50, 1)" in spin_block          # 50 % = duty 512 < POWER_SAFE_MAX 550
+assert "FieldNumber(50, 0, 100, 1)" in spin_block         # 100 % = full PWM (duty 1023)
 assert "Math.round(pct * 1023 / 100)" in spin_block
-assert "backward_at" in spin_block and "forward_at" in spin_block
+assert "_arm_motion_deadline" in spin_block and "_abort_requested" in spin_block and "FLIP_A" in spin_block
 
 assert "Blockly.Blocks['robot_stop_if_close']" in source
 assert "stop forward motors if US is less than" in source
