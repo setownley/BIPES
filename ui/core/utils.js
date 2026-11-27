@@ -711,7 +711,9 @@ class files {
   }
   /**
    * Python prepended to an IDE run: refresh robot_settings.txt on flash, then
-   * apply it. apply_settings() rather than a re-import, because MicroPython
+   * apply it, and clear robot.py's abort latch so a motor safety cut-out in an
+   * earlier run does not silently block every motor in this one (DevLink runs
+   * already do this). apply_settings() rather than a re-import, because MicroPython
    * caches modules - `import robot` is a no-op once robot is in sys.modules,
    * so only an explicit call can change a Timer 0 that is already running.
    * @return {string}
@@ -721,7 +723,9 @@ class files {
          + "f.write('" + this.robot_settings_text ().replace ('\n', '\\n') + "')\n"
          + "f.close()\n"
          + "import robot\n"
-         + "robot.apply_settings()\n";
+         + "robot.apply_settings()\n"
+         + "if hasattr(robot, 'clear_abort'):\n"
+         + "    robot.clear_abort()\n";
   }
   /**
    * One-shot, cable-free motor calibration image. save_main() substitutes

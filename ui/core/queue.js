@@ -552,8 +552,10 @@ window.addEventListener('load', function () {
      * browned out; one motor with a paper disc is not that load. Drives the
      * PWM channels directly (no trim, no ramp, no breakaway kick) so the number
      * on the block is exactly what the driver chip gets. It still respects the
-     * abort latch, arms the same 8 s motion deadline, honours FLIP_A, and
-     * robot.stop() brakes and releases it like any other motion.
+     * abort latch and honours FLIP_A, and robot.stop() brakes and releases it.
+     * Each spin motor block gives the motor a fresh 60 s safety lease instead of
+     * the robot's 8 s one, so long spinner runs work; the lease still stops a
+     * forgotten motor.
      */
     Blockly.Blocks['robot_spin_percent'] = {
         init: function() {
@@ -569,7 +571,7 @@ window.addEventListener('load', function () {
                 .appendField('% power');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Spin motor A with the power ON for 0 to 100 % of the time. 100 % = full power. It keeps spinning until a stop motors block runs.');
+            this.setTooltip('Spin motor A with the power ON for 0 to 100 % of the time. 100 % = full power. It keeps spinning until a stop motors block runs (60 seconds at most).');
         }
     };
 
@@ -583,8 +585,8 @@ window.addEventListener('load', function () {
             '        on, off = "A2", "A1"\n' +
             '    else:\n' +
             '        on, off = "A1", "A2"\n' +
-            '    if duty and getattr(robot, "_motion_deadline", 0) is None:\n' +
-            '        robot._arm_motion_deadline()\n' +
+            '    if duty:\n' +
+            '        robot._arm_motion_deadline(60000)\n' +
             '    robot._pwm[off].duty(0)\n' +
             '    robot._pwm[on].duty(duty)';
         var pct = Math.min(Math.max(Number(block.getFieldValue('PCT')) || 0, 0), 100);
