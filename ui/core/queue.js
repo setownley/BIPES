@@ -544,12 +544,16 @@ window.addEventListener('load', function () {
         return 'robot.' + fn + '(' + block.getFieldValue('DUTY') + ')\n';
     };
 
-    /* ---- spin the motor at a % of the safe maximum power -------------------
-     * Lesson 6 speed experiment. 0-100 % of POWER_SAFE_MAX (duty 550 of 1023,
-     * the firmware cap: 600 caused brownout resets). duty = round(pct * 550 / 100),
-     * so 100 % is the most the firmware allows and every step up to it really
-     * changes the speed; nothing is silently clamped. Goes through
-     * forward_at()/backward_at(): same motion deadline, ramp and stop behaviour.
+    /* ---- spin motor A with the power ON for 0-100 % of the time -------------
+     * Lesson 6 speed experiment: ONE motor on channel A, a paper disc on the
+     * shaft. The % is the real PWM ON-time: duty = round(pct * 1023 / 100), so
+     * 100 % = power ON all the time. This deliberately bypasses POWER_SAFE_MAX
+     * (550): that cap exists for the two-motor robot under load, where 600
+     * browned out; one motor with a paper disc is not that load. Drives the
+     * PWM channels directly (no trim, no ramp, no breakaway kick) so the number
+     * on the block is exactly what the driver chip gets. It still respects the
+     * abort latch, arms the same 8 s motion deadline, honours FLIP_A, and
+     * robot.stop() brakes and releases it like any other motion.
      */
     Blockly.Blocks['robot_spin_percent'] = {
         init: function() {
@@ -565,16 +569,28 @@ window.addEventListener('load', function () {
                 .appendField('% power');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
-            this.setTooltip('Spin the motor at 0 to 100 % power. 100 % is the most power Robot OS allows. It keeps spinning until a stop motors block runs.');
+            this.setTooltip('Spin motor A with the power ON for 0 to 100 % of the time. 100 % = full power. It keeps spinning until a stop motors block runs.');
         }
     };
 
     Blockly.Python['robot_spin_percent'] = function(block) {
         Blockly.Python.definitions_['import_robot'] = 'import robot';
+        Blockly.Python.definitions_['bipes_spin_percent'] =
+            'def _bipes_spin(duty, reverse):\n' +
+            '    if getattr(robot, "_abort_requested", False):\n' +
+            '        duty = 0\n' +
+            '    if reverse != getattr(robot, "FLIP_A", False):\n' +
+            '        on, off = "A2", "A1"\n' +
+            '    else:\n' +
+            '        on, off = "A1", "A2"\n' +
+            '    if duty and getattr(robot, "_motion_deadline", 0) is None:\n' +
+            '        robot._arm_motion_deadline()\n' +
+            '    robot._pwm[off].duty(0)\n' +
+            '    robot._pwm[on].duty(duty)';
         var pct = Math.min(Math.max(Number(block.getFieldValue('PCT')) || 0, 0), 100);
-        var duty = Math.round(pct * 550 / 100);
-        var fn = block.getFieldValue('DIR') === 'backward' ? 'backward_at' : 'forward_at';
-        return 'robot.' + fn + '(' + duty + ')\n';
+        var duty = Math.round(pct * 1023 / 100);
+        var rev = block.getFieldValue('DIR') === 'backward' ? 'True' : 'False';
+        return '_bipes_spin(' + duty + ', ' + rev + ')\n';
     };
 
     /* ---- DevLink data passed between repeated block runs ----------------- */
