@@ -31,7 +31,7 @@ spin_end = source.index("/* ---- DevLink data", spin_start)
 spin_block = source[spin_start:spin_end]
 assert "FieldNumber(50, 0, 100, 1)" in spin_block         # 100 % = full PWM (duty 1023)
 assert "Math.round(pct * 1023 / 100)" in spin_block
-assert "_arm_motion_deadline" in spin_block and "_abort_requested" in spin_block and "FLIP_A" in spin_block
+assert "_arm_motion_deadline(60000)" in spin_block and "_abort_requested" in spin_block and "FLIP_A" in spin_block
 
 assert "Blockly.Blocks['robot_stop_if_close']" in source
 assert "stop forward motors if US is less than" in source
